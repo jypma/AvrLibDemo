@@ -1,14 +1,18 @@
 #include "Pin.hpp"
+#include "Timer.hpp"
 #include "RealTimer.hpp"
 
 /*
- Program:    1622 bytes (4.9% Full)
+Program:     654 bytes (2.0% Full)
 (.text + .data + .bootloader)
 
-Data:         50 bytes (2.4% Full)
+Data:         16 bytes (0.8% Full)
 (.data + .bss + .noinit)
  */
-RealTimer<IntPrescaler> rt(timer2, TimerMode::fastPWM, IntPrescaler61Hz);
+
+const Timer0<ExtPrescaler61Hz> tm0;
+const RealTimer<typeof tm0, &tm0> rt;
+const PinD9 pinD9;
 
 void loop() {
     pinD9.setHigh();
