@@ -1,0 +1,11 @@
+[Unit]
+Description=Infrared decoder
+After=network.target
+
+[Service]
+Type=simple
+Environment=SERIAL_INPUT=/dev/ttyUSB0
+ExecStart=/usr/local/bin/irdecoder
+
+[Install]
+WantedBy=multi-user.target

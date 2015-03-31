@@ -19,12 +19,6 @@ PinD1<> pind1;
 auto decoder1 = IRDecoder_NEC<counter_t>();
 auto decoder2 = IRDecoder_Samsung<counter_t>();
 
-uint8_t changes;
-
-void onChange(volatile void *ctx) {
-    changes++;
-}
-
 bool handlePulse() {
     counter_t::PulseEvent evt;
     if (counter.in() >> evt) {
@@ -74,12 +68,7 @@ void loop() {
  }
 
 int main(void) {
-  pind1.out() << "hahaha" << endl;
-
-  //TODO re-enable this once auto interrupt chaining
-  pina0.configureAsInputWithPullup();
-  //pina0.interrupt().attach(&onChange);
-  //pina0.interruptOnChange();
+  pind1.out() << "ready." << endl;
 
   while(true) {
     loop();

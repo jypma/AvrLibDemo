@@ -1,3 +1,6 @@
 Blink/
 Release/
 Serial/
+/RFM12
+/IRDecode
+/IRDecode-linux
