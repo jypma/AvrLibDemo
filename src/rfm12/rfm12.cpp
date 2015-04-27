@@ -13,11 +13,7 @@ PinD8 pinD8;
 PinD7 pinD7;
 PinD2 pinD2;
 SPIMaster spi;
-Fifo<32> txData;
-ChunkedFifo tx(&txData);
-Fifo<32> rxData;
-ChunkedFifo rx(&rxData);
-RFM12<typeof spi,spi, tx, rx, typeof pinD10, pinD10, typeof pinD2, pinD2> rfm12(RFM12Band::_868Mhz);
+RFM12<typeof spi,spi,typeof pinD10, pinD10, typeof pinD2, pinD2> rfm12(RFM12Band::_868Mhz);
 
 uint32_t loops = 0;
 
@@ -66,16 +62,33 @@ void loop() {
 
 }
 
+volatile uint8_t send_idx = 0;
+volatile uint8_t send_length = 1;
+
+void send() {
+    pind1.out() << "sending" << endl;
+    {
+        auto out = rfm12.out();
+        for (int i = 0; i < send_length; i++) {
+            out << (send_idx++);
+        }
+    }
+
+    send_length++;
+    if (send_length > 10) {
+        send_length = 1;
+    }
+    rt.delayMillis(1000);
+
+}
+
 int main(void) {
     pind1.out() << "Initialized." << endl;
 
-    volatile uint8_t i;
     while(true) {
-        pind1.out() << "foo" << endl;
-        rfm12.out() << i;
-        rt.delayMillis(1000);
-       //loop();
-              i++;
+        //send();
+
+        loop();
     }
 }
 

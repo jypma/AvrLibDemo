@@ -4,20 +4,19 @@
 #include "RealTimer.hpp"
 #include "PulseCounter.hpp"
 #include "ChunkedFifo.hpp"
-#include "IRDecoder.hpp"
+#include "FS20Decoder.hpp"
 
-Timer0_Normal<ExtPrescaler::_256> tm0;
-Timer1_Normal<ExtPrescaler::_256> tm1;
+Timer0_Normal<ExtPrescaler::_64> tm0;
+Timer1_Normal<ExtPrescaler::_64> tm1;
 Timer2_Normal<IntPrescaler::_1024> tm2;
 auto comp = tm1.comparatorA();
 
 PinA0 pina0;
-typedef PulseCounter<typeof tm1, &tm1, typeof comp, &comp, typeof pina0, &pina0, 254> counter_t;
+typedef PulseCounter<typeof tm0, &tm0, typeof comp, &comp, typeof pina0, &pina0, 254> counter_t;
 counter_t counter;
-RealTimer<typeof tm0, &tm0> rt;
-PinD1<> pind1;
-auto decoder1 = IRDecoder_NEC<counter_t>();
-auto decoder2 = IRDecoder_Samsung<counter_t>();
+RealTimer<typeof tm2, &tm2> rt;
+PinD1<254> pind1;
+auto decoder = FS20Decoder<counter_t,254>();
 
 uint8_t changes;
 
@@ -30,32 +29,50 @@ bool handlePulse() {
     if (counter.in() >> evt) {
 
         /*
-        switch(evt.getType()) {
-          case PulseType::HIGH: pind1.out() << " ^" << dec(evt.getLength()) << " "; break;
-          case PulseType::LOW: pind1.out() << " _" << dec(evt.getLength()) << " "; break;
-          case PulseType::TIMEOUT: pind1.out() << "<TIMEOUT>" << endl; break;
-          default: pind1.out() << " ?? " <<  dec(uint8_t(evt.getType())) ; break;
+        if (evt.getLength() > 15 && evt.getLength() < 50 ) {
+            switch(evt.getType()) {
+              case PulseType::LOW: pind1.out() << " ^" << dec(evt.getLength()) << " "; break;
+              case PulseType::HIGH: pind1.out() << " _" << dec(evt.getLength()) << " "; break;
+              default: break;
+            }
+        } else {
+            pind1.out() << endl;
         }
         */
 
-        decoder1.apply(evt);
-        decoder2.apply(evt);
+        decoder.apply(evt);
         return true;
     } else {
-        IRCode code;
-        if (decoder1.in() >> code) {
-            pind1.out() << "nec : " << dec(uint8_t(code.getType())) << "," << dec(code.getCommand()) << endl;
+        //FS20Packet packet;
+        //decoder.in() >> packet;
+        uint8_t b;
+        if (decoder.in() >> b) {
+            pind1.out() << ">" << dec(b) << endl;
             return true;
-        } else if (decoder2.in() >> code) {
-            pind1.out() << "sams: " << dec(uint8_t(code.getType())) << "," << dec(code.getCommand()) << endl;
-            return true;
-        } else {
-            return false;
         }
     }
+
+    return false;
 }
 
+int writing = -1;
 void loop() {
+/*
+    if (decoder.bitCount > 10) {
+        writing = 100;
+    }
+    if (writing > 0) {
+        pind1.out() << " [ " << dec(uint8_t(decoder.state)) << " " << dec(decoder.bitCount) << " " << dec(decoder.byteCount) << "]" << endl;
+        writing--;
+    }
+
+    if (!decoder.logOn) {
+        for (int i = 0; i < 255; i++) {
+            pind1.out() << dec(decoder.log[i]) << " ";
+        }
+        pind1.out() << endl;
+    }
+*/
     //rt.delayMillis(50);
     //pind1.out() << dec(decoder2.count) << " / " << dec(uint8_t(decoder2.state)) << " / " << dec(decoder2.command) << endl;
 
@@ -74,12 +91,10 @@ void loop() {
  }
 
 int main(void) {
-  pind1.out() << "hahaha" << endl;
-
-  //TODO re-enable this once auto interrupt chaining
   pina0.configureAsInputWithPullup();
-  //pina0.interrupt().attach(&onChange);
-  //pina0.interruptOnChange();
+  pind1.out() << "hahaha" << endl;
+  pind1.out() << dec(decoder.zero_length) << " / " << dec(decoder.one_length) << endl;
+
 
   while(true) {
     loop();

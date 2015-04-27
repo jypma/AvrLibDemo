@@ -12,7 +12,7 @@ Timer2_Normal<IntPrescaler::_1024> tm2;
 auto comp = tm1.comparatorA();
 
 PinA0 pina0;
-typedef PulseCounter<typeof tm1, &tm1, typeof comp, &comp, typeof pina0, &pina0, 254> counter_t;
+typedef PulseCounter<typeof tm1, tm1, typeof comp, comp, typeof pina0, pina0, 254> counter_t;
 counter_t counter;
 RealTimer<typeof tm0, &tm0> rt;
 PinD1<> pind1;
@@ -25,8 +25,8 @@ bool handlePulse() {
 
         /*
         switch(evt.getType()) {
-          case PulseType::HIGH: pind1.out() << " ^" << dec(evt.getLength()) << " "; break;
-          case PulseType::LOW: pind1.out() << " _" << dec(evt.getLength()) << " "; break;
+          case PulseType::LOW: pind1.out() << " ^" << dec(evt.getLength()) << " "; break;
+          case PulseType::HIGH: pind1.out() << " _" << dec(evt.getLength()) << " "; break;
           case PulseType::TIMEOUT: pind1.out() << "<TIMEOUT>" << endl; break;
           default: pind1.out() << " ?? " <<  dec(uint8_t(evt.getType())) ; break;
         }
