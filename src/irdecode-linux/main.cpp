@@ -10,6 +10,8 @@
 #include <errno.h>      // Error number definitions
 #include <termios.h>    // POSIX terminal control definitions
 #include <map>
+#include <set>
+#include <stdint.h>
 
 int read_line(const int fd, char *target, int maxlength) {
     *target = 0;
@@ -108,7 +110,7 @@ void pressKey(const int fd, const int key) {
 int main() {
 
     // This is for Yamaha DVD, 2064
-    std::map<int,int> ircode_to_keycode;
+    std::map<uint32_t,int> ircode_to_keycode;
     ircode_to_keycode[1052847570] = KEY_UP;
     ircode_to_keycode[1052888370] = KEY_DOWN;
     ircode_to_keycode[1052880210] = KEY_LEFT;
@@ -138,13 +140,23 @@ int main() {
     ircode_to_keycode[1052887350] = KEY_0;
     ircode_to_keycode[1052883270] = KEY_102ND;
     ircode_to_keycode[1052866950] = KEY_EDIT;
-    ircode_to_keycode[-25109980] = KEY_HOME;
-    ircode_to_keycode[-25134460] = KEY_END;
-    ircode_to_keycode[-25131400] = KEY_PAGEUP;
-    ircode_to_keycode[-25155880] = KEY_PAGEDOWN;
-    ircode_to_keycode[-25158940] = KEY_F1;
-    ircode_to_keycode[-25122220] = KEY_F2;
-    ircode_to_keycode[-25106920] = KEY_F3;
+    ircode_to_keycode[4269857316] = KEY_HOME;
+    ircode_to_keycode[4269832836] = KEY_END;
+    ircode_to_keycode[4269835896] = KEY_PAGEUP;
+    ircode_to_keycode[4269811416] = KEY_PAGEDOWN;
+    ircode_to_keycode[4269808356] = KEY_F1;
+    ircode_to_keycode[4269845076] = KEY_F2;
+    ircode_to_keycode[4269860376] = KEY_F3;
+
+    std::set<int> allow_repeat;
+    allow_repeat.insert(KEY_UP);
+    allow_repeat.insert(KEY_DOWN);
+    allow_repeat.insert(KEY_LEFT);
+    allow_repeat.insert(KEY_RIGHT);
+    allow_repeat.insert(KEY_REWIND);
+    allow_repeat.insert(KEY_FASTFORWARD);
+    allow_repeat.insert(KEY_PAGEUP);
+    allow_repeat.insert(KEY_PAGEDOWN);
 
     int fd;
 
@@ -221,7 +233,7 @@ int main() {
         std::smatch result;
         if (std::regex_search(s, result, expected)) {
             int type = atoi(result[1].str().c_str());
-            int cmd = atoi(result[2].str().c_str());
+            uint32_t cmd = atoll(result[2].str().c_str());
             if (type == 0) {
                 std::cout << cmd << std::endl;
 
@@ -239,7 +251,7 @@ int main() {
                 std::cout << "  *repeated*" << std::endl;
                 timeval now;
                 gettimeofday(&now, nullptr);
-                if (lastKey != -1) {
+                if (lastKey != -1 && allow_repeat.find(lastKey) != allow_repeat.end()) {
                     auto diff = (now.tv_sec - lastKeyTime.tv_sec) * 1000 + ((now.tv_usec - lastKeyTime.tv_usec) / 1000);
                     if (diff > 200) {
                         pressKey(fd, lastKey);
