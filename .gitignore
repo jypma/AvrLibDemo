@@ -5,3 +5,5 @@ Serial/
 /IRDecode
 /IRDecode-linux
 /HCSR04
+/OOKDecode
+/ESP8266
