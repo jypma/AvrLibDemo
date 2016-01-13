@@ -1,34 +1,32 @@
-#include "Pin.hpp"
-#include "Timer.hpp"
-#include "Usart.hpp"
-#include "RealTimer.hpp"
+#include "HAL/Atmel/Device.hpp"
 #include "Serial/PulseCounter.hpp"
+#include "Time/RealTimer.hpp"
 #include "FS20/FS20Decoder.hpp"
 #include "Visonic/VisonicDecoder.hpp"
-#include "Logging.hpp"
 
-using namespace TimeUnits;
+using namespace HAL::Atmel;
+using namespace Serial;
+using namespace Time;
 using namespace FS20;
 using namespace Visonic;
 
-Timer0_Normal<ExtPrescaler::_64> tm0;
-Timer1_Normal<ExtPrescaler::_8> tm1;
-Timer2_Normal<IntPrescaler::_1024> tm2;
-auto comp = tm0.comparatorA();
+auto timer0 = Timer0().withPrescaler<64>().inNormalMode();
+Usart0 usart0(57600);
+auto pinTX = PinPD1(usart0);
+auto pinOOK = PinPD3();
+//auto pinOOK = JeeNodePort1A::withInterrupt();
+auto pinOOK_EN = PinPD4();
 
-Usart0 usart0;
-PinD0<Usart0, 254> pinD0 (usart0);
-PinD1<Usart0, 254> pinD1 (usart0);
-PinD3<> pulsePin;
-PinD9<> pinD9;
-PinA0 pinA0;
-PinA1 pinA1;
-auto counter = pulseCounter<typeof comp, typeof pulsePin, 250>(comp, pulsePin, (30_us).template toCounts<typeof tm0>());
-auto rt = realTimer(tm2);
+auto comp = timer0.comparatorA();
+auto counter = pulseCounter(comp, pinOOK, 150_us);
+auto rt = realTimer(timer0);
+auto every1sec = periodic(rt, 1000_ms);
+
 auto fs20 = fs20Decoder(counter);
 auto visonic = visonicDecoder(counter);
-auto every100ms = periodic(rt, 100_ms);
-auto every1sec = periodic(rt, 1000_ms);
+
+mkISRS(usart0, timer0, pinTX, pinOOK, counter, rt);
+
 
 constexpr uint16_t eventMax = 300;
 constexpr uint8_t pulsesPerLoop = 4;
@@ -37,6 +35,7 @@ uint32_t pulses = 0;
 uint16_t eventPos = 0;
 uint8_t eventLongs = 0;
 bool printNext = false;
+uint8_t hours, minutes, seconds;
 
 void printEvents() {
     /*
@@ -53,11 +52,11 @@ void printEvents() {
     if (print) {
     */
     if (eventLongs > 10) {
-        pinD1.out() << dec(eventPos) << ": ";
+        pinTX.out() << dec(eventPos) << ": ";
         for (uint16_t i = 0; i < eventPos; i++) {
-            pinD1.out() << dec(eventSeq[i]) << " ";
+            pinTX.out() << dec(eventSeq[i]) << " ";
         }
-        pinD1.out() << endl;
+        pinTX.out() << endl;
         printNext = false;
         eventPos = 0;
         eventLongs = 0;
@@ -69,21 +68,20 @@ void printEvents() {
 
 }
 
-extern uint8_t int1_invocations;
-
 bool callPrint;
 void handlePulse() {
 
-    if (every1sec.isNow()) {
-        pinD1.out() << "v: " << dec(visonic.totalBits) << " p: " << dec(pulses) << " o: " << dec(counter.getOverflows()) << "i: " << dec(int1_invocations) << endl;
-        pinD1.out() << "d3: " << pulsePin.isHigh() << endl;
-    }
-
+    //if (doPrint.isNow()) {
+    //    pinTX.out() << " p: " << dec(pulses) << " o: " << dec(counter.getOverflows()) << endl;
+    //    pinTX.out() << "d3: " << pinOOK.isHigh() << endl;
+   // }
 
     callPrint = false;
     counter.onMax(pulsesPerLoop, [] (auto pulse) {
 
         pulses++;
+
+        //pinTX.out() << (pulse.isHigh() ? " ^" : " _") << dec(pulse.getDuration());
 
         //if (evt.getLength() > (100_us).template toCounts<typeof tm1>() && evt.getLength() < (1000_us).template toCounts<typeof tm1>() ) {
 
@@ -112,6 +110,15 @@ void handlePulse() {
         visonic.apply(pulse);
     });
 
+    /*
+    uint8_t reason;
+    uint8_t state;
+    uint8_t byteCount;
+    int8_t bitCount;
+    if (fs20.failures.in() >> reason >> state >> byteCount >> bitCount) {
+        pinTX.out() << ":( " << dec(reason) << " " << dec(state) << " " << dec(byteCount) << " " << dec(bitCount) << endl;
+    }
+*/
 
     if (callPrint) {
         printEvents();
@@ -121,24 +128,40 @@ void handlePulse() {
 
         FS20Packet fs20Packet;
         if (fs20.in() >> fs20Packet) {
-            pinD1.out() << "FS20: " << dec(fs20Packet.houseCodeHi) << ", " << dec(fs20Packet.houseCodeLo) << ", " << dec(fs20Packet.address) << ", " << dec(fs20Packet.command) << endl;
+            pinTX.out() << dec(hours) << ":" << dec(minutes) << ":" << dec(seconds) << " FS20: " << dec(fs20Packet.houseCodeHi) << ", " << dec(fs20Packet.houseCodeLo) << ", " << dec(fs20Packet.address) << ", " << dec(fs20Packet.command) << endl;
         }
 
         VisonicPacket visonicPacket;
         if (visonic.in() >> visonicPacket) {
-            pinD1.out() << "Viso: " << dec(visonicPacket.data[0]) << ", " << dec(visonicPacket.data[1]) << ", " << dec(visonicPacket.data[2]) << ", " << dec(visonicPacket.data[3]) << ", " << dec(visonicPacket.data[4]) << endl;
+            pinTX.out() << dec(hours) << ":" << dec(minutes) << ":" << dec(seconds) << " Viso: " << dec(visonicPacket.data[0]) << ", " << dec(visonicPacket.data[1]) << ", " << dec(visonicPacket.data[2]) << ", " << dec(visonicPacket.data[3]) << ", " << dec(visonicPacket.data[4]) << "(" << dec(visonicPacket.lastBit) << "," << (visonicPacket.flipped ? '1' : '0') << ")" << endl;
 
         }
 
 }
 
 int main(void) {
-  pinD9.configureAsOutput();
-  pinD1.out() << "ookdecode. 100ms=" << dec((100_us).template toCounts<typeof tm1>()) << endl;
+    pinOOK_EN.configureAsOutput();
+    pinOOK_EN.setHigh();
+    pinOOK.configureAsInputWithPullup();
+    pinTX.out() << "ookdecode. 100ms="
+            << dec(uint8_t(toCountsOn(timer0, 300_us))) << " TCCR0A="
+            << dec(TCCR0A) << endl;
 
-  while(true) {
-    handlePulse();
-  }
+    while (true) {
+        if (every1sec.isNow()) {
+            seconds++;
+            if (seconds >= 59) {
+                seconds = 0;
+                minutes++;
+                if (minutes >= 59) {
+                    minutes = 0;
+                    hours++;
+                }
+            }
+            //pinTX.out() << "bits: " << dec(visonic.totalBits) << endl;
+        }
+        handlePulse();
+    }
 }
 
 /*

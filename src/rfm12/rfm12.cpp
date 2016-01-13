@@ -1,26 +1,34 @@
+#include "HAL/Atmel/Device.hpp"
 #include "HopeRF/RFM12.hpp"
-#include "Timer.hpp"
-#include "RealTimer.hpp"
+#include "Time/RealTimer.hpp"
 #include "SPI.hpp"
-#include "ChunkedFifo.hpp"
 
-using namespace HopeRF;
+using namespace HAL::Atmel;
+using namespace Time;
 using namespace FS20;
+using namespace Serial;
+using namespace HopeRF;
 
-Timer0_Normal<ExtPrescaler::_256> tm0;
-auto rt = realTimer(tm0);
-auto comp = tm0.comparatorA();
 Usart0 usart0(115200);
-PinD1<Usart0> pind1(usart0);
-PinD10<> pinD10;
-PinD9<> pinD9;
-PinD8 pinD8;
-PinD7 pinD7;
-PinD2 pinD2;
 SPIMaster spi;
-RFM12<typeof spi,typeof pinD10, typeof pinD2, typeof comp, true,254,32> rfm(spi, pinD10, pinD2, comp, RFM12Band::_868Mhz);
 
-uint32_t loops = 0;
+auto timer0 = Timer0().withPrescaler<64>().inNormalMode();
+auto rt = realTimer(timer0);
+auto comp = timer0.comparatorA();
+auto pinTX = PinPD1<254>(usart0);
+auto pinRFM12_INT = PinPD2();
+auto pinRFM12_SS = PinPB2();
+
+auto rfm = rfm12(spi, pinRFM12_SS, pinRFM12_INT, comp, RFM12Band::_868Mhz);
+
+mkISRS(usart0, timer0, comp, pinTX, rt, rfm);
+
+uint32_t packets = 0;
+auto onPing = periodic(rt, 1000_ms);
+
+void log(const char *msg) {
+    pinTX.out() << msg << endl;
+}
 
 void loop() {
     //loops++;
@@ -43,20 +51,17 @@ void loop() {
 
     //}
 
-
-    uint8_t packets = 0;
-    while (rfm.hasContent()) {
+    auto in = rfm.in();
+    if (in) {
         packets++;
-        auto in = rfm.in();
-        uint8_t length = in.getReadAvailable();
-        pind1.out() << dec(length) << " bytes, ";
-        for (uint8_t i = 0; i < length; i++) {
-            uint8_t value;
-            in >> value;
-            pind1.out() << " " << dec(value);
-        }
-        pind1.out() << endl;
-    }
+        pinTX.out() << "[";
+        pinTX.out() << dec(in);
+        pinTX.out() << "]" << endl;
+    };
+
+    //if (onPing.isNow()) {
+    //    pinTX.out() << dec(packets) << " " << dec(rfm.getRecvCount()) << " " << dec(rfm.getUnderruns()) << " mode: " << dec(uint8_t(rfm.getMode())) << "cont: " << rfm.hasContent() << endl;
+    //}
 
     /*
     if (packets > 0) {
@@ -71,10 +76,10 @@ volatile uint8_t send_idx = 0;
 volatile uint8_t send_length = 1;
 
 void sendFSK() {
-    pind1.out() << "sending FSK" << endl;
+    pinTX.out() << "sending FSK, length " << dec(send_length) << endl;
     {
-        auto out = rfm.out();
-        for (int i = 0; i < 10; i++) {
+        auto out = rfm.out_fsk(42);
+        for (int i = 0; i < send_length; i++) {
             out << uint8_t(83);
         }
     }
@@ -83,12 +88,10 @@ void sendFSK() {
     if (send_length > 10) {
         send_length = 1;
     }
-    //rt.delayMillis(1000);
-
 }
 
 void sendOOK() {
-    pind1.out() << "sending OOK" << endl;
+    pinTX.out() << "sending OOK p:" << dec(rfm.getPulses()) << endl;
     uint8_t command = 18;
     FS20Packet packet (0b00011011, 0b00011011, 0b00000000, command, 0);
     rfm.out_fs20(packet);
@@ -96,13 +99,25 @@ void sendOOK() {
 }
 
 int main(void) {
-    pind1.out() << "Initialized." << endl;
+    //Logging::onMessage = &log;
+
+    pinTX.out() << "Initialized." << endl;
+    //sendOOK();
+    bool ook = true;
 
     while(true) {
+        //pinTX.out() << "i: " << dec(rfm.getInterrupts()) << " p: " << dec(rfm.pulses) << endl;
         //sendFSK();
-        //rt.delayMillis(400);
-        //sendOOK();
-        //rt.delayMillis(300);
+        //rt.delay(400_ms);
+        if (onPing.isNow()) {
+            //if (ook) {
+            //    sendOOK();
+            //} else {
+            //    sendFSK();
+            //}
+            ook = !ook;
+        }
+        //t.delay(400_ms);
 
         loop();
     }
