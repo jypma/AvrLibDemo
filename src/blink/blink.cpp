@@ -1,6 +1,5 @@
-#include "Pin.hpp"
-#include "Timer.hpp"
-#include "RealTimer.hpp"
+#include "HAL/Atmel/Device.hpp"
+#include "Time/RealTimer.hpp"
 
 /*
 Program:     654 bytes (2.0% Full)
@@ -9,23 +8,38 @@ Program:     654 bytes (2.0% Full)
 Data:         16 bytes (0.8% Full)
 (.data + .bss + .noinit)
  */
+using namespace HAL::Atmel;
+using namespace Time;
 
-const Timer0<ExtPrescaler61Hz> tm0;
-const RealTimer<typeof tm0, &tm0> rt;
-const PinD9 pinD9;
+auto timer0 = Timer0().withPrescaler<1024>().inNormalMode();
+auto rt = realTimer(timer0);
+auto LED = PinPD4(); // D4
+auto LED2 = PinPD5(); // D4
+Usart0 usart0(57600);
+auto pinTX = PinPD1(usart0);
+
+mkISRS(rt, pinTX);
 
 void loop() {
-    pinD9.setHigh();
+    //LED.setHigh();
 
-    rt.delayMillis(1000);
+    sei();
+    pinTX.write(F("here-is-a-string-thats-longer-than-15\n"));
 
-    pinD9.setLow();
+    rt.delay(1000_ms);
 
-    rt.delayMillis(1000);
+    //LED.setLow();
+
+    pinTX.write(F("here-is-another-string-thats-longer-than-15"));
+
+    rt.delay(1000_ms);
 }
 
 int main(void) {
-    pinD9.configureAsOutput();
+    LED.configureAsOutput();
+    LED2.configureAsOutput();
+    LED.setLow();
+    LED2.setLow();
 
     while(true) {
        loop();

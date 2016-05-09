@@ -9,3 +9,13 @@ Serial/
 /ESP8266
 /Flashlight/
 /Lamp2/
+/DHT11/
+/HCSR501/
+/GardenValve/
+/CapSense/
+/DS18B20/
+src/flashlight/eeprom/mkeeprom
+*.bin
+*.hex
+src/gardenvalve/eeprom/mkeeprom
+src/irdecode-linux/irdecode

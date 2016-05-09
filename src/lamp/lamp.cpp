@@ -30,17 +30,17 @@ auto rfm = rfm12(spi, pinRFM12_SS, pinRFM12_INT, timer0.comparatorA(), RFM12Band
 
 auto btn = button(rt, buttonPin);
 auto anim = animator(rt);
-auto power = Power();
+auto power = Power<decltype(rt)>(rt);
 auto autoOff = deadline(rt, 30_min);
 
 uint16_t unhandledStatusCount = 0;
 
 #ifdef DEBUG
-auto printDebug = periodic(rt, 5_s);
+auto printDebug = deadline(rt, 1_s);
 #endif
 
 #ifdef DEBUG
-mkISRS(timer0, timer1, rt, rfm, usart0, pinTX);
+mkISRS(timer0, timer1, rt, rfm, usart0, pinTX, btn);
 #else
 mkISRS(timer0, timer1, rt, rfm);
 #endif
@@ -50,7 +50,7 @@ Mode mode = Mode::OFF;
 
 void send(uint8_t q) {
     uint8_t rgb = (q > 0) ? 255 : 0;
-    rfm.out_fsk(31) << ID1 << ID2 << ' ' << ' ' << uint8_t(6) << rgb << rgb << rgb << q;
+    rfm.out_fsk(31) << "foo" << ID1 << ID2 << ' ' << ' ' << uint8_t(6) << rgb << rgb << rgb << q;
 }
 
 void turn(Mode m) {
@@ -72,10 +72,10 @@ void turn(Mode m) {
 }
 
 int main() {
+    uint16_t wakeups = 0;
 #ifdef DEBUG
     pinTX.out() << "1 second is " << dec(uint32_t(toCountsOn(rt, 1000_ms))) << endl;
 #endif
-    buttonPin.interruptOnLow();
     lampPin.configureAsOutput();
     lampPin.setLow();
     lampPin.timerComparator().setOutput(FastPWMOutputMode::connected);
@@ -83,7 +83,9 @@ int main() {
     while (true) {
 #ifdef DEBUG
         if (printDebug.isNow()) {
-            pinTX.out() << "i: " << dec(rfm.getInterrupts()) << " r: " << dec(rfm.recvCount) << " u: " << dec(rfm.getUnderruns()) << " m: " << dec(uint8_t(rfm.getMode())) << endl;
+            pinTX.out() << "i: " << dec(rfm.getInterrupts()) << " r: " << dec(rfm.recvCount) << " u: " << dec(rfm.getUnderruns()) << " m: " << dec(uint8_t(rfm.getMode())) << "im: " << dec(uint8_t(rfm.getMode())) << "s:" << dec(rfm.intStatus) << endl;
+            pinTX.out() << "wakeups: " << dec(wakeups) << endl;
+            printDebug.reset();
         }
 #endif
         if (rfm.unhandledStatusCount > unhandledStatusCount) {
@@ -91,15 +93,22 @@ int main() {
             unhandledStatusCount++;
         }
 
-        auto evt = anim.nextEvent();
-
-        if (evt.isChanged()) {
-            lampPin.timerComparator().setTargetFromNextRun(evt.getValue());
-        } else if (autoOff.isNow() && mode != Mode::OFF) {
-            turn(Mode::OFF);
-        } else if (btn.nextEvent() == ButtonEvent::PRESSED) {
+        if (autoOff.isNow() && mode != Mode::OFF) {
 #ifdef DEBUG
-            pinTX.out() << "button." << endl;
+            pinTX.out() << "Auto turning off." << endl;
+#endif
+            turn(Mode::OFF);
+        }
+
+        const auto animEvt = anim.nextEvent();
+        if (animEvt.isChanged()) {
+            lampPin.timerComparator().setTargetFromNextRun(animEvt.getValue());
+        }
+
+        const auto btnEvt = btn.nextEvent();
+        if (btnEvt == ButtonEvent::PRESSED) {
+#ifdef DEBUG
+            pinTX.out() << "<-- PRESSED" << endl;
 #endif
             autoOff.reset();
 
@@ -108,7 +117,14 @@ int main() {
             case Mode::OFF: turn(Mode::DIM); break;
             case Mode::DIM: turn(Mode::ON); break;
             }
-        } else if (rfm.hasContent()) {
+        }
+        else if (btnEvt == ButtonEvent::RELEASED) {
+#ifdef DEBUG
+            pinTX.out() << "--> RELEASED" << endl;
+#endif
+        }
+
+        if (rfm.hasContent()) {
             uint8_t header, sender0, sender1, receiver0, receiver1, r, g, b, q;
             if (rfm.in() >> header >> sender0 >> sender1 >> receiver0 >> receiver1 >> r >> g >> b >> q) {
                 if (receiver0 == ID1 && receiver1 == ID2) {
@@ -135,17 +151,28 @@ int main() {
 #endif
                 rfm.in(); // ignore packet
             }
-        } else if (rfm.getMode() == RFM12Mode::LISTENING){
-            /*
+        }
+
+        if (animEvt.isIdle()
+                && !rfm.hasContent()
+                && rfm.getMode() == RFM12Mode::LISTENING
+                && (btnEvt == ButtonEvent::RELEASED || btnEvt == ButtonEvent::UP)) {
+
+            auto target = (animEvt.getValue() == 0 || animEvt.getValue() == 0xFFFF) ? SleepMode::STANDBY : SleepMode::IDLE;
+            auto gran = (mode == Mode::OFF) ? SleepGranularity::_8000ms : SleepGranularity::_500ms;
 #ifdef DEBUG
-            pinTX.out() << "powering down." << endl;
+//            auto left = autoOff.timeLeft();
+//            auto millis = left.toMillisOn<decltype(rt)>().getValue();
+//            pinTX.out() << "powering down into mode " << dec(uint8_t(mode)) << " for " << dec(left.getValue()) << "t / " << dec(millis) << "ms" << endl;
             pinTX.flush();
 #endif
-            power.powerDown();
-#ifdef DEBUG
-            pinTX.out() << "awake! " << dec(uint8_t(rfm.getMode())) << endl;
-#endif
-*/
+            //power.sleep(mode);
+            power.sleepUntil(autoOff, target, gran); // auto-select mode based on enabled & connected timers
+//#ifdef DEBUG
+//            pinTX.out() << "awake! " << dec(uint8_t(rfm.getMode())) << endl;
+//#endif
+            wakeups++;
         }
+
     }
 }

@@ -26,10 +26,6 @@ mkISRS(usart0, timer0, comp, pinTX, rt, rfm);
 uint32_t packets = 0;
 auto onPing = periodic(rt, 1000_ms);
 
-void log(const char *msg) {
-    pinTX.out() << msg << endl;
-}
-
 void loop() {
     //loops++;
     /*
@@ -51,12 +47,11 @@ void loop() {
 
     //}
 
-    auto in = rfm.in();
-    if (in) {
+    if (rfm.hasContent()) {
         packets++;
-        pinTX.out() << "[";
-        pinTX.out() << dec(in);
-        pinTX.out() << "]" << endl;
+        rfm.readStart();
+        pinTX.write('[', dec(&rfm), ']', endl);
+        rfm.readEnd();
     };
 
     //if (onPing.isNow()) {
@@ -76,12 +71,14 @@ volatile uint8_t send_idx = 0;
 volatile uint8_t send_length = 1;
 
 void sendFSK() {
-    pinTX.out() << "sending FSK, length " << dec(send_length) << endl;
+    pinTX.write(F("sending FSK, length "), dec(send_length), endl);
     {
-        auto out = rfm.out_fsk(42);
-        for (int i = 0; i < send_length; i++) {
-            out << uint8_t(83);
-        }
+        rfm.write_fsk(42, Nested([] (auto write) {
+            for (int i = 0; i < send_length; i++) {
+                if (!write(uint8_t(83))) return false;
+            }
+            return true;
+        }));
     }
 
     send_length++;
@@ -91,17 +88,17 @@ void sendFSK() {
 }
 
 void sendOOK() {
-    pinTX.out() << "sending OOK p:" << dec(rfm.getPulses()) << endl;
+    pinTX.write(F("sending OOK p:"), dec(rfm.getPulses()), endl);
     uint8_t command = 18;
     FS20Packet packet (0b00011011, 0b00011011, 0b00000000, command, 0);
-    rfm.out_fs20(packet);
+    rfm.write_fs20(packet);
 
 }
 
 int main(void) {
     //Logging::onMessage = &log;
 
-    pinTX.out() << "Initialized." << endl;
+    pinTX.write(F("Initialized."), endl);
     //sendOOK();
     bool ook = true;
 
@@ -110,11 +107,11 @@ int main(void) {
         //sendFSK();
         //rt.delay(400_ms);
         if (onPing.isNow()) {
-            //if (ook) {
-            //    sendOOK();
-            //} else {
-            //    sendFSK();
-            //}
+            if (ook) {
+                sendOOK();
+            } else {
+                sendFSK();
+            }
             ook = !ook;
         }
         //t.delay(400_ms);
