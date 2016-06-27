@@ -19,3 +19,4 @@ src/flashlight/eeprom/mkeeprom
 *.hex
 src/gardenvalve/eeprom/mkeeprom
 src/irdecode-linux/irdecode
+/LDR/

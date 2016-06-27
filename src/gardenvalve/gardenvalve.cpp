@@ -1,3 +1,14 @@
+#include "GardenValve/GardenValve.hpp"
+
+struct EEPROM {
+    uint16_t bandgapVoltage;
+};
+
+RUN_APP(GardenValve::GardenValve<&EEPROM::bandgapVoltage>)
+
+LOGGING_TO(app.pinTX)
+
+/*
 #include "HAL/Atmel/Device.hpp"
 #include "HAL/Atmel/Power.hpp"
 #include "Time/RealTimer.hpp"
@@ -24,10 +35,13 @@ auto timer0 = Timer0().withPrescaler<1024>().inNormalMode();
 auto timer2 = Timer2().withPrescaler<8>().inNormalMode();
 auto rt = realTimer(timer0);
 typedef decltype(rt) rt_t;
-auto autoOff = deadline(rt, 2_min);
+auto autoOff = deadline(rt, 10_min);  // Valve will stay open for []
+auto autoOn = deadline(rt, 30_s);    // Valve will stay closed for [] before opening again
+auto resendState = deadline(rt, 30_s);
 auto resendPing = deadline(rt, 1_s);
 auto deepsleep = deadline(rt, 120_min);
 auto adc = ADConverter();
+bool on1 = false;
 
 auto pinRFM12_INT = PinPD2();
 auto pinRFM12_SS = PinPB2();
@@ -41,20 +55,24 @@ auto rfm = rfm12(spi, pinRFM12_SS, pinRFM12_INT, timer0.comparatorA(), RFM12Band
 
 mkISRS(usart0, pinTX, rt, rfm, power);
 
-bool on = false;
+uint8_t valveRemaining = 0;
 uint16_t currentSupply = 0;
 uint8_t sendAttempts = 10;
 
 void measureSupply() {
+    supply.get();
+    supply.get();
+    supply.get();
+    supply.get();
     currentSupply = supply.get();
-//    log::debug(F("Supply is "), dec(currentSupply), F("mV"));
 }
 
 void sendState() {
     measureSupply();
     rfm.write_fsk(31, 'V', '1', Padding(2),
             uint8_t(1),          // state
-            uint8_t(on ? 1 : 0), // currently on valve (0 = off)
+            uint8_t(on1 ? 1 : 0), // which valve is on
+            uint8_t(valveRemaining), // Valve 1 remaining
             currentSupply);
 }
 
@@ -71,20 +89,29 @@ void sendPing() {
 
 void turnOff() {
     log::debug(F("Turning off"));
-    on = false;
+    on1 = false;
     pinValve.setLow();
     autoOff.cancel();
     rfm.onIdleSleep();
     deepsleep.schedule();
+    if (valveRemaining > 1) {
+        valveRemaining--;
+        log::debug(F("Remaining: "), dec(valveRemaining));
+        autoOn.schedule();
+    } else {
+        valveRemaining = 0;
+    }
     sendState();
+    resendState.cancel();
 }
 
 void turnOn() {
     log::debug(F("Turning on"));
-    on = true;
+    on1 = true;
     pinValve.setHigh();
     autoOff.schedule();
     sendState();
+    resendState.schedule();
 }
 
 int main() {
@@ -94,28 +121,35 @@ int main() {
     measureSupply();
     measureSupply();
     measureSupply();
+    autoOn.cancel();
     autoOff.cancel();
     deepsleep.cancel();
+    resendState.cancel();
     pinValve.configureAsOutput();
     pinValve.setLow();
     sendPing();
     rfm.onIdleListen();
     while(true) {
-        uint8_t state = 255;
+        uint8_t state1 = 255;
+        // We only listen to the last received packet
         while (rfm.hasContent()) {
             rfm.readStart();
             if (rfm.read(
                 Padding(3),  // header + sender
                 'V', '1',    // recipient. TODO make this in EEPROM
                 FB(2),       // expected state
-                &state
+                &state1
             )) {
             }
             rfm.readEnd();
         }
-        if (state == 0 || state == 1) {
+        if (state1 < 10) {
+            // We've received a packet
+            log::debug(F("count: "), dec(state1));
             resendPing.cancel();
-            if (state == 0) {
+            rfm.onIdleSleep();
+            valveRemaining = state1;
+            if (valveRemaining == 0) {
                 turnOff();
             } else {
                 turnOn();
@@ -130,19 +164,22 @@ int main() {
                 turnOff();
             }
         } else if (autoOff.isNow()) {
-            log::debug(F("Auto-turn off kicking in"));
+            log::debug(F("Auto-off kicking in"));
             turnOff();
+        } else if (autoOn.isNow()) {
+            log::debug(F("Auto-on kicking in"));
+            turnOn();
         } else if (deepsleep.isNow()) {
             sendAttempts = 10;
             sendPing();
-        } else if (rfm.isIdle()) {
-            auto time1 = toMillisOn<rt_t>(autoOff.timeLeft()).getValue();
-            auto time2 = toMillisOn<rt_t>(resendPing.timeLeft()).getValue();
-            auto time3 = toMillisOn<rt_t>(deepsleep.timeLeft()).getValue();
-            log::debug(F("Times:"), dec(time1), ' ', dec(time2), ' ', dec(time3));
+        } else if (resendState.isNow()) {
+            sendState();
+            resendState.schedule();
+        } else {
             pinTX.flush();
-            auto mode = (rfm.isSleeping() ? SleepMode::POWER_DOWN : SleepMode::STANDBY);
-            power.sleepUntilAny(mode, autoOff, resendPing, deepsleep);
+            auto mode = (rfm.isSleeping() ? SleepMode::POWER_DOWN : SleepMode::IDLE);
+            power.sleepUntilAny(mode, autoOff, autoOn, resendPing, resendState, deepsleep);
         }
     }
 }
+*/
