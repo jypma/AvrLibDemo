@@ -20,3 +20,13 @@ src/flashlight/eeprom/mkeeprom
 src/gardenvalve/eeprom/mkeeprom
 src/irdecode-linux/irdecode
 /LDR/
+/BH1750/
+/GardenSensor/
+/RoomSensor/
+/ADC/
+/MeterBoxSensor/
+/Doorbell/
+/MultiButton/
+/RS232TxTest/
+/SHTDemo/
+/LightOrgan/

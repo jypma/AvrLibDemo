@@ -1,3 +1,14 @@
+#include "HAL/Atmel/Device.hpp"
+
+using namespace HAL;
+
+int main() {
+	DDRB |= DDB0 | DDB2;
+	DDRB |= DDB1;
+	DDRC |= DDC0;
+}
+
+/*
 #include "Pin.hpp"
 #include "Timer.hpp"
 #include "Usart.hpp"
@@ -23,15 +34,6 @@ bool handlePulse() {
     counter_t::PulseEvent evt;
     if (counter.in() >> evt) {
 
-        /*
-        switch(evt.getType()) {
-          case PulseType::LOW: pind1.out() << " ^" << dec(evt.getLength()) << " "; break;
-          case PulseType::HIGH: pind1.out() << " _" << dec(evt.getLength()) << " "; break;
-          case PulseType::TIMEOUT: pind1.out() << "<TIMEOUT>" << endl; break;
-          default: pind1.out() << " ?? " <<  dec(uint8_t(evt.getType())) ; break;
-        }
-        */
-
         decoder1.apply(evt);
         decoder2.apply(evt);
         return true;
@@ -52,18 +54,6 @@ bool handlePulse() {
 void loop() {
     //rt.delayMillis(50);
     //pind1.out() << dec(decoder2.count) << " / " << dec(uint8_t(decoder2.state)) << " / " << dec(decoder2.command) << endl;
-
-    /*
-    pind1.out() << "tm1: " << dec(TCNT1) << " ocr1a: " << dec(OCR1A) << endl;
-    pind1.out() << "a0: " << (pina0.isHigh() ? "high" : "low") << endl;
-    pind1.out() << "changes: " << dec(changes) << endl;
-
-    pind1.out() << "tm0: " << dec(TCNT0) << endl;
-    pind1.out() << "tm2: " << dec(TCNT2) << endl;
-
-    pind1.out() << "rt: " << dec(uint16_t(rt.counts() >> 16)) << endl;
-    */
-
     while (handlePulse()) ;
  }
 
@@ -75,3 +65,4 @@ int main(void) {
   }
 }
 
+*/
