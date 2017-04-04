@@ -60,6 +60,7 @@ $(OBJECTS): $(BUILDDIR)/%.o: $(SOURCEDIR)/%.cpp Makefile
 	$(CXX) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) $(INCLUDES) -MMD -c $< -o $@
 
 $(TARGET).elf: $(OBJECTS)
+	make -C $(AVRLIB)
 	$(CC) $(LDFLAGS) $(TARGET_ARCH) $^ $(LDLIBS) -o $@
 
 %.hex: %.elf
