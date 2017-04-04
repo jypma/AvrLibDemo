@@ -10,6 +10,7 @@
 #include "HAL/Atmel/InterruptHandlers.hpp"
 #include "Passive/SupplyVoltage.hpp"
 #include "Dallas/DS18x20.hpp"
+#include "Tasks/TaskState.hpp"
 
 using namespace HAL::Atmel;
 using namespace Time;
@@ -24,6 +25,7 @@ struct Message {
     uint16_t sender;
     Option<uint16_t> supply;
     Option<uint8_t> open;
+    Option<int16_t> temperature;
 
     typedef Protobuf::Protocol<Message> P;
 
@@ -31,7 +33,8 @@ struct Message {
         P::Varint<1, uint16_t, &Message::sender>,
         P::Varint<8, uint8_t, &Message::seq>,
         P::Varint<9, Option<uint16_t>, &Message::supply>,
-        P::Varint<10, Option<uint8_t>, &Message::open>
+        P::Varint<10, Option<uint8_t>, &Message::open>,
+        P::Varint<11, Option<int16_t>, &Message::temperature>
     > DefaultProtocol;
 };
 
@@ -52,20 +55,19 @@ struct DoorSensor {
     auto_var(sensorPin, PinPB1().withInterrupt());
     auto_var(sensor, Button(rt, sensorPin, 200_ms));
 
-    /*
     auto_var(tempPin, PinPD4());
     auto_var(tempWire, OneWireParasitePower(tempPin, rt));
     auto_var(temp, SingleDS18x20(tempWire));
-    */
 
     auto_var(rfm, rfm12(spi, pinRFM12_SS, pinRFM12_INT, timer0.comparatorA(), RFM12Band::_868Mhz));
     auto_var(power, Power(rt));
     auto_var(pinSupply, PinPC0());
     auto_var(supplyVoltage, (SupplyVoltage<4700, 1000, &EEPROM::bandgapVoltage>(adc, pinSupply)));
 
-    auto_var(resend, periodic(rt, 10_min));
+    auto_var(resend, periodic(rt, 10_sec));
 
     uint8_t seq;
+    bool measuring;
 
     typedef Delegate<This, decltype(rt), &This::rt,
             Delegate<This, decltype(rfm), &This::rfm,
@@ -80,8 +82,11 @@ struct DoorSensor {
         Message m;
         m.seq = seq;
         m.sender = 'd' << 8 | read(&EEPROM::id);
+        m.temperature = temp.getTemperature();
+        log::debug(F("Temp: "), dec(m.temperature));
         for (int i = 0; i < 10; i++) supplyVoltage.get();
         m.supply = supplyVoltage.get();
+        log::debug(F("Supl: "), dec(m.supply));
         m.open = open ? 1 : 0;
         rfm.write_fsk(42, &m);
         resend.reschedule();
@@ -89,9 +94,16 @@ struct DoorSensor {
 
     void loop() {
         auto rfmState = rfm.getTaskState();
+        TaskState tempState = temp.getTaskState();
         auto resendState = TaskState(resend, SleepMode::POWER_DOWN);
 
         if (resend.isNow()) {
+            log::debug(F("Go"));
+            measuring = true;
+            temp.measure();
+        }
+        if (measuring && tempState.isIdle()) {
+            measuring = false;
             send(sensor.isUp());
         }
 
@@ -106,13 +118,14 @@ struct DoorSensor {
         }
 
         log::flush();
-        power.sleepUntilTasks(rfmState, resendState);
+        power.sleepUntilTasks(rfmState, tempState, resendState);
     }
 
     int main() {
         sensorPin.configureAsInputWithoutPullup();
         rfm.onIdleSleep();
         log::debug(F("DoorSensor "));
+        for (int i = 0; i < 100; i++) supplyVoltage.get();
         while(true) loop();
     }
 };
