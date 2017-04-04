@@ -79,7 +79,7 @@ $(EEPROM_BINS): $(BUILDDIR)/%.eeprom_bin: $(EEPROM_SOURCEDIR)/%.eeprom $(MKEEPRO
 	$(OBJDUMP) -S $< > $@
 
 ## These targets don't have files named after them
-.PHONY: all directories disassemble disasm eeprom size flash fuses
+.PHONY: all directories disassemble disasm eeprom size flash fuses serial
 
 directories: $(BUILDDIR)
 
@@ -105,6 +105,10 @@ fuses:
 
 show_fuses:
 	$(AVRDUDE) -c $(PROGRAMMER_TYPE) -p $(MCU) $(PROGRAMMER_ARGS) -nv	
+
+serial:
+	stty -F /dev/ttyUSB0 57600 raw -clocal -echo
+	cat /dev/ttyUSB0 | awk '{ print strftime("%c: "), $$0; fflush(); }'
 
 ## Set the EESAVE fuse byte to preserve EEPROM across flashes
 set_eeprom_save_fuse: HFUSE = 0xD7
