@@ -30,3 +30,7 @@ src/irdecode-linux/irdecode
 /RS232TxTest/
 /SHTDemo/
 /LightOrgan/
+.cproject
+.project
+.settings
+target
