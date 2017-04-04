@@ -34,3 +34,4 @@ src/irdecode-linux/irdecode
 .project
 .settings
 target
+*.eeprom
