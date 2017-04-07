@@ -64,7 +64,7 @@ struct DoorSensor {
     auto_var(pinSupply, PinPC0());
     auto_var(supplyVoltage, (SupplyVoltage<4700, 1000, &EEPROM::bandgapVoltage>(adc, pinSupply)));
 
-    auto_var(resend, periodic(rt, 10_sec));
+    auto_var(resend, periodic(rt, 10_min));
 
     uint8_t seq;
     bool measuring;
