@@ -1,7 +1,6 @@
-#include "RoomSensor/RoomSensor.hpp"
+#include "RoomSensor.hpp"
 #include "eeprom.hpp"
 
-typedef RoomSensor::RoomSensor<&EEPROM::bandgapVoltage, &EEPROM::id> TheApp;
-RUN_APP(TheApp)
+RUN_APP(RoomSensor)
 
 LOGGING_TO(app.pinTX)

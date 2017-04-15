@@ -1,1 +1,1 @@
-../common.mk
+../../tools/common.mk
