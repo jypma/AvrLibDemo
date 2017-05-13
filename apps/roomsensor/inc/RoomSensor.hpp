@@ -127,10 +127,16 @@ struct RoomSensor {
         	log::debug(F("ints: "), dec(pir.getInts()));
             log::debug(F("Motion!"));
         	m.motion = 1;
+            for (int i = 0; i < 10; i++) supplyVoltage.get();
+            m.supply = supplyVoltage.get();
+            log::debug(F("Suppl: "), dec(m.supply));
             seq++;
             m.seq = seq;
             m.sender = 'Q' << 8 | read(&EEPROM::id);
-            rfm.write_fsk(42, &m);
+            if (m.supply >= uint16_t(3300)) {
+                // PIR sensor gets unreliable when dropping below 3.3V
+                rfm.write_fsk(42, &m);
+            }
         }
 
         if (rfm.isIdle()) {
