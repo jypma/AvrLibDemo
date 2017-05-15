@@ -6,3 +6,4 @@ R  MeterBoxSensor
 V  GardenValve
 d  DoorSensor
 r  RFSwitch
+n  NimhCharge
