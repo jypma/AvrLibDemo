@@ -230,11 +230,12 @@ struct NimhCharge {
         pinDisable.configureAsOutputHigh();
         pinOut1.configureAsOutputLow();
         pinOut2.configureAsOutputLow();
-        measure();
         while (temp.isMeasuring()) ;
         auto t = temp.getTemperature();
         log::debug(F("Temp: "), dec(t));
-        log::debug(F("Done"));
+        lastTemp = t;
+        measure();
+        log::debug(F("Init done"));
         while(true) loop();
     }
 };
