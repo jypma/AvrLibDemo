@@ -60,7 +60,7 @@ struct DoorSensor {
     auto_var(temp, SingleDS18x20(tempWire));
 
     auto_var(rfm, rfm12(spi, pinRFM12_SS, pinRFM12_INT, timer0.comparatorA(), RFM12Band::_868Mhz));
-    auto_var(power, Power(rt));
+    HAL::Atmel::Impl::Power<decltype(rt)> power = { rt };
     auto_var(pinSupply, PinPC0());
     auto_var(supplyVoltage, (SupplyVoltage<4700, 1000, &EEPROM::bandgapVoltage>(adc, pinSupply)));
 

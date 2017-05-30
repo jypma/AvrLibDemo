@@ -76,7 +76,7 @@ struct RoomSensor {
 
     auto_var(rfm, (rfm12<4,100>(spi, pinRFM12_SS, pinRFM12_INT, timer0.comparatorA(), RFM12Band::_868Mhz)));
     auto_var(supplyVoltage, (SupplyVoltage<4700, 1000, &EEPROM::bandgapVoltage>(adc, pinSupply)));
-    auto_var(power, Power(rt));
+    HAL::Atmel::Impl::Power<decltype(rt)> power = { rt };
     auto_var(dht, DHT22(pinDHT, pinDHTPower, timer0.comparatorB(), rt));
     auto_var(pir, HCSR501(pinPIRData, pinPIRPower, rt));
     TWI<> twi = {};

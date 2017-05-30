@@ -47,7 +47,7 @@ struct RFSwitch {
     auto_var(pinRFM12_INT, PinPD2());
 
     auto_var(rfm, rfm12(spi, pinRFM12_SS, pinRFM12_INT, timer0.comparatorA(), RFM12Band::_868Mhz));
-    auto_var(power, Power(rt));
+    HAL::Atmel::Impl::Power<decltype(rt)> power = { rt };
 
     auto_var(pinOut0, PinPD4());
     auto_var(pinOut1, PinPD5());

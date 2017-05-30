@@ -76,7 +76,7 @@ struct NimhCharge {
     auto_var(timer0, Timer0::withPrescaler<1024>::inNormalMode());
 
     auto_var(rt, realTimer(timer0));
-    auto_var(power, Power(rt));
+    HAL::Atmel::Impl::Power<decltype(rt)> power = { rt };
 
     auto_var(pinDisable, JeeNodePort3D());
     auto_var(pinSupply, JeeNodePort3A());
@@ -233,7 +233,9 @@ struct NimhCharge {
         while (temp.isMeasuring()) ;
         auto t = temp.getTemperature();
         log::debug(F("Temp: "), dec(t));
-        lastTemp = t;
+        if (t.isDefined()) {
+            lastTemp = t.get();
+        }
         measure();
         log::debug(F("Init done"));
         while(true) loop();
