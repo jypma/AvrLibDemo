@@ -107,8 +107,9 @@ fuses:
 show_fuses:
 	$(AVRDUDE) -c $(PROGRAMMER_TYPE) -p $(MCU) $(PROGRAMMER_ARGS) -nv	
 
+BAUD=57600
 serial:
-	stty -F /dev/ttyUSB0 57600 raw -clocal -echo
+	stty -F /dev/ttyUSB0 $(BAUD) raw -clocal -echo
 	cat /dev/ttyUSB0 | awk '{ print strftime("%c: "), $$0; fflush(); }'
 
 ## Set the EESAVE fuse byte to preserve EEPROM across flashes
