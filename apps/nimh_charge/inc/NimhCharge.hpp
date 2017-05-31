@@ -112,7 +112,8 @@ struct NimhCharge {
 
     typedef Delegate<This, decltype(rt), &This::rt,
             Delegate<This, decltype(pinTX), &This::pinTX,
-            Delegate<This, decltype(power), &This::power>>>
+            Delegate<This, decltype(rfm), &This::rfm,
+            Delegate<This, decltype(power), &This::power>>>>
             Handlers;
 
     void done(uint8_t reason) {
@@ -135,7 +136,7 @@ struct NimhCharge {
     void charge() {
         log::debug(F("ON!"));
         charges++;
-        if (charges > ((capacity / current) * 3600 / chargeTime.getAmount()))  {
+        if (charges > ((capacity / current) * 3600 * 2 /* guess 0.5 of max current given Danish sun */ / chargeTime.getAmount()))  {
             log::debug(F("  timeout!"));
             done(TIMEOUT);
             return;
@@ -157,8 +158,9 @@ struct NimhCharge {
         auto t = temp.getTemperature();
         log::debug(F("Temp: "), dec(t));
         if (tempTick.isNow()) {
-            if (t > int16_t(lastTemp + 10)) {
+            if (t > int16_t(lastTemp + 8)) {   // 0.8°C / min
                 log::debug(F("  dT!"));
+                lastTemp = t.get();
                 done(TEMP_DT);
             }
         }
@@ -189,7 +191,13 @@ struct NimhCharge {
         m.solarVoltage = solar;
         m.supplyVoltage = supply;
         m.temp = lastTemp;
+
+        // radio packets don't always make it. So, tx 3 times, and idle before charging again.
         rfm.write_fsk(42, &m);
+        rfm.write_fsk(42, &m);
+        rfm.write_fsk(42, &m);
+        uint16_t timeout = 60000;
+        while (!rfm.isIdle() && (timeout-- > 1)) ;
 
         if (solar < supply + 20) {
             log::debug(F("  night!"));
@@ -217,7 +225,15 @@ struct NimhCharge {
             switch(state) {
             case CHARGE: cooldown(); break;
             case COOLDOWN: measure(); break;
-            case WAIT: measure(); break;
+            case WAIT:
+                temp.measure();
+                while (temp.isMeasuring()) ;
+                auto t = temp.getTemperature();
+                if (t.isDefined()) {
+                    lastTemp = t.get();
+                }
+                measure();
+                break;
             }
         }
 
@@ -233,9 +249,12 @@ struct NimhCharge {
         while (temp.isMeasuring()) ;
         auto t = temp.getTemperature();
         log::debug(F("Temp: "), dec(t));
-        lastTemp = t;
+        if (t.isDefined()) {
+            lastTemp = t.get();
+        }
         measure();
         log::debug(F("Init done"));
+        log::flush();
         while(true) loop();
     }
 };
