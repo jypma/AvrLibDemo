@@ -215,6 +215,12 @@ struct NimhCharge {
         TaskState rfmState = rfm.getTaskState();
         TaskState mainState = TaskState(stateTick, SleepMode::POWER_DOWN);
 
+        supplyVoltage.stopOnLowBattery(6000, [this] {
+            rfm.onIdleSleep();
+            uint16_t timeout = 60000;
+            while (timeout-- > 0 && !rfm.isIdle()) ;
+        });
+
         if (outputs.isStateChanged()) {
             auto out = outputs.getState().outputs;
             pinOut1.setHigh((out & 1) != 0);
