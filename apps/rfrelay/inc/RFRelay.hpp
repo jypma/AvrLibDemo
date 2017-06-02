@@ -30,12 +30,16 @@ struct RFRelay {
     static auto constexpr band = RFM12Band::_868Mhz;
 
     Usart0 usart0 = { 115200 };
-    auto_var(pinTX, PinPD1<128>(usart0));
-    auto_var(pinRX, PinPD0<128>(usart0));
+    auto_var(pinTX, PinPD1<250>(usart0));
+    auto_var(pinRX, PinPD0<250>(usart0));
 
     auto_var(timer0, Timer0::withPrescaler<64>::inNormalMode());
     auto_var(timer1, Timer1::withPrescaler<64>::inNormalMode());
     auto_var(rt, realTimer(timer0));
+
+    auto_var(pinLOG, PinPB1(timer1));
+    auto_var(logger, (RS232Tx<9600, 240>(pinLOG)));
+
     auto_var(pinRFM12_INT, PinPD2());
     auto_var(pinOOK, PinPD3());
     auto_var(pinOOK_EN, PinPD4());
@@ -43,16 +47,14 @@ struct RFRelay {
     auto_var(pinLED1, PinPD6());
     auto_var(pinESP_PD, PinPD7());
     auto_var(pinLED2, PinPB0());
-    auto_var(pinLOG, PinPB1(timer1));
     auto_var(pinRFM12_SS, PinPB2());
-    auto_var(rfm, rfm12(spi, pinRFM12_SS, pinRFM12_INT, timer0.comparatorA(), band));
+    auto_var(rfm, (rfm12<128,128>(spi, pinRFM12_SS, pinRFM12_INT, timer0.comparatorA(), band)));
     auto_var(counter, pulseCounter(timer0.comparatorB(), pinOOK, 150_us));
     auto_var(esp, (esp8266<&EEPROM::apn,&EEPROM::password,&EEPROM::remoteIP,&EEPROM::remotePort>(pinTX, pinRX, pinESP_PD, rt)));
     auto_var(fs20, fs20Decoder(counter));
     auto_var(visonic, visonicDecoder(counter));
     auto_var(pingInterval, periodic(rt, 30_s));
     auto_var(rfmWatchdog, deadline(rt, 60000_ms));
-    auto_var(logger, (RS232Tx<9600, 240>(pinLOG)));
 
     typedef Delegate<This, decltype(pinTX), &This::pinTX,
     		Delegate<This, decltype(pinRX), &This::pinRX,
@@ -87,6 +89,7 @@ struct RFRelay {
         }
 
         if (rfm.in().hasContent()) {
+            log::debug('i',dec(rfm.in().getSize()));
             rfmWatchdog.schedule();
             rfm.in().readStart();
             log::debug('r',dec(rfm.in().getReadAvailable()),'o',dec(esp.getSpace()));
@@ -132,7 +135,7 @@ struct RFRelay {
 
         uint8_t state = static_cast<uint8_t>(esp.getState());
         if (prevState != state) {
-            log::debug(F("-> state "), dec(state));
+            log::debug(F("-> "), dec(state));
             prevState = state;
         }
         if (blinkOn) {
