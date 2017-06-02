@@ -53,7 +53,7 @@ TARGET_ARCH = -mmcu=$(MCU)
 
 FUSE_STRING = -U lfuse:w:$(LFUSE):m -U hfuse:w:$(HFUSE):m -U efuse:w:$(EFUSE):m 
 
-all: directories $(TARGET).hex
+all: directories $(TARGET).hex size
 
 ##  To make .o files from .cpp files 
 $(OBJECTS): $(BUILDDIR)/%.o: $(SOURCEDIR)/%.cpp Makefile
@@ -92,13 +92,13 @@ disasm: disassemble
 size:  $(TARGET).elf
 	$(AVRSIZE) -C --mcu=$(MCU) $(TARGET).elf
 
-flash: $(TARGET).hex 
+flash: $(TARGET).hex size
 	$(AVRDUDE) -c $(PROGRAMMER_TYPE) -p $(MCU) $(PROGRAMMER_ARGS) -U flash:w:$<
 
 flash_eeprom: $(EEPROM_FILE)
 	$(AVRDUDE) -c $(PROGRAMMER_TYPE) -p $(MCU) $(PROGRAMMER_ARGS) -U eeprom:w:$<
 
-upload: $(TARGET).hex $(EEPROM_FILE)
+upload: $(TARGET).hex $(EEPROM_FILE) size
 	$(AVRDUDE) -c $(PROGRAMMER_TYPE) -p $(MCU) $(PROGRAMMER_ARGS) -U flash:w:$(TARGET).hex -U eeprom:w:$(EEPROM_FILE)
 
 fuses: 
@@ -110,7 +110,7 @@ show_fuses:
 BAUD=57600
 serial:
 	stty -F /dev/ttyUSB0 $(BAUD) raw -clocal -echo
-	cat /dev/ttyUSB0 | awk '{ print strftime("%c: "), $$0; fflush(); }'
+	cat /dev/ttyUSB0 | awk '{ print strftime("%c: "), $$0; fflush(); }' | tee target/serial.log
 
 ## Set the EESAVE fuse byte to preserve EEPROM across flashes
 set_eeprom_save_fuse: HFUSE = 0xD7
