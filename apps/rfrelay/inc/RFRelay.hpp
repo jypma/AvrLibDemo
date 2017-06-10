@@ -133,18 +133,15 @@ struct RFRelay {
             }
         }
 
-        uint8_t state = static_cast<uint8_t>(esp.getState());
-        if (prevState != state) {
-            log::debug(F("-> "), dec(state));
-            prevState = state;
-        }
-        if (blinkOn) {
-            state ^= (1 << blinkIdx);
+        uint8_t s = static_cast<uint8_t>(esp.getState());
+        if (prevState != s) {
+            log::debug(F("-> "), dec(s));
+            prevState = s;
         }
 
-        pinLED0.setHigh(state & 1);
-        pinLED1.setHigh(state & 2);
-        pinLED2.setHigh(state & 4);
+        pinLED0.setHigh(esp.isConnecting() ? blinkOn : esp.isConnected());
+        pinLED1.setHigh(esp.isSending());
+        pinLED2.setHigh(esp.isReceiving());
 
         counter.onMax(10, [&] (Pulse pulse) {
             fs20.apply(pulse);
