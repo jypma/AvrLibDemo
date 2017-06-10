@@ -87,7 +87,10 @@ struct NimhCharge {
     auto_var(pinOut1, JeeNodePort1D());
     auto_var(pinOut2, JeeNodePort2D());
 
-    auto_var(rfm, (rfm12<4,100>(spi, pinRFM12_SS, pinRFM12_INT, timer0.comparatorA(), RFM12Band::_868Mhz)));
+    auto_var(pinSupplyCurrent, JeeNodePort2A());
+    auto_var(pinSupplyCurrentSign, JeeNodePort1A());
+
+    auto_var(rfm, (rfm12<200,200>(spi, pinRFM12_SS, pinRFM12_INT, timer0.comparatorA(), RFM12Band::_868Mhz)));
     auto_var(outputs, (RxState<decltype(rfm), Outputs>(rfm, 'n' << 8 | read(&EEPROM::id), {})));
 
     auto_var(supplyVoltage, (SupplyVoltage<10000, 1000, &EEPROM::bandgapVoltage>(adc, pinSupply)));
@@ -109,6 +112,8 @@ struct NimhCharge {
 
     static constexpr auto chargeTime = 10_sec;
     static constexpr auto waitTime = 60_min;   // wait this long before deciding to top up again
+
+    static constexpr uint16_t cutoffSupply = 6300; // mV
 
     typedef Delegate<This, decltype(rt), &This::rt,
             Delegate<This, decltype(pinTX), &This::pinTX,
@@ -158,7 +163,7 @@ struct NimhCharge {
         auto t = temp.getTemperature();
         log::debug(F("Temp: "), dec(t));
         if (tempTick.isNow()) {
-            if (t > int16_t(lastTemp + 8)) {   // 0.8°C / min
+            if (t > int16_t(lastTemp + 11)) {   // 1.1°C / min
                 log::debug(F("  dT!"));
                 lastTemp = t.get();
                 done(TEMP_DT);
@@ -209,22 +214,49 @@ struct NimhCharge {
             lastSupply = supply;
             charge();
         }
+
+        if (supply < cutoffSupply) {
+            pinOut1.setLow();
+            pinOut2.setLow();
+        }
     }
 
+    uint8_t ints = 0;
     void loop() {
         TaskState rfmState = rfm.getTaskState();
         TaskState mainState = TaskState(stateTick, SleepMode::POWER_DOWN);
 
         supplyVoltage.stopOnLowBattery(6000, [this] {
+            log::debug(F("Oh-oh"));
             rfm.onIdleSleep();
+            pinOut1.setLow();
+            pinOut2.setLow();
             uint16_t timeout = 60000;
             while (timeout-- > 0 && !rfm.isIdle()) ;
+            log::flush();
         });
 
         if (outputs.isStateChanged()) {
             auto out = outputs.getState().outputs;
-            pinOut1.setHigh((out & 1) != 0);
-            pinOut2.setHigh((out & 2) != 0);
+            log::debug('o', dec(out));
+            bool enable = (lastSupply < 100 || lastSupply >= cutoffSupply);
+            pinOut1.setHigh(enable && ((out & 1) != 0));
+            pinOut2.setHigh(enable && ((out & 2) != 0));
+        }
+
+        if (rfm.in().hasContent()) {
+            log::debug('i');
+            // ignore all other incoming RFM packets
+            rfm.in().readStart();
+            /*
+            while (rfm.in().getReadAvailable() > 0) {
+                uint8_t ch;
+                rfm.in().read(&ch);
+                pinTX.write(dec(ch), ' ');
+            }
+            pinTX.write('\n');
+            */
+            rfm.in().readEnd();
         }
 
         if (stateTick.isNow()) {
@@ -252,9 +284,14 @@ struct NimhCharge {
         pinDisable.configureAsOutputHigh();
         pinOut1.configureAsOutputLow();
         pinOut2.configureAsOutputLow();
+        log::debug(F("waiting"));
+        log::flush();
         while (temp.isMeasuring()) ;
+        log::debug(F("getting"));
+        log::flush();
         auto t = temp.getTemperature();
         log::debug(F("Temp: "), dec(t));
+        log::flush();
         if (t.isDefined()) {
             lastTemp = t.get();
         }
