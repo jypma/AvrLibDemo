@@ -35,3 +35,4 @@ src/irdecode-linux/irdecode
 .settings
 target
 *.eeprom
+*.bak
