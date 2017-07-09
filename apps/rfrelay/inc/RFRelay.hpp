@@ -22,6 +22,33 @@ using namespace Serial;
 using namespace HopeRF;
 using namespace Streams;
 
+struct Ping {
+    EthernetMACAddress mac;
+    uint8_t seq = 0;
+    uint16_t packets_out = 0;
+    uint16_t packets_in = 0;
+    uint8_t rfmWatchdog = 0;
+    uint8_t espWatchdog = 0;
+
+    void reset() {
+        seq++;
+        packets_out = 0;
+        packets_in = 0;
+        rfmWatchdog = 0;
+        espWatchdog = 0;
+    }
+
+    typedef Protobuf::Protocol<Ping> P;
+    typedef P::Message<
+        P::SubMessage<1, EthernetMACAddress, &Ping::mac, EthernetMACAddress::BinaryProtocol>,
+        P::Varint<2, uint8_t, &Ping::seq>,
+        P::Varint<3, uint16_t, &Ping::packets_out>,
+        P::Varint<4, uint16_t, &Ping::packets_in>,
+        P::Varint<5, uint8_t, &Ping::rfmWatchdog>,
+        P::Varint<6, uint8_t, &Ping::espWatchdog>
+    > DefaultProtocol;
+};
+
 struct RFRelay {
     typedef RFRelay This;
     typedef Logging::Log<Loggers::Main> log;
@@ -37,7 +64,7 @@ struct RFRelay {
     auto_var(timer1, Timer1::withPrescaler<64>::inNormalMode());
     auto_var(rt, realTimer(timer0));
 
-    auto_var(pinLOG, PinPB1(timer1));
+    auto_var(pinLOG, PinPB1(timer1)); // Arduino D9
     auto_var(logger, (RS232Tx<9600, 240>(pinLOG)));
 
     auto_var(pinRFM12_INT, PinPD2());
@@ -53,7 +80,7 @@ struct RFRelay {
     auto_var(esp, (esp8266<&EEPROM::apn,&EEPROM::password,&EEPROM::remoteIP,&EEPROM::remotePort>(pinTX, pinRX, pinESP_PD, rt)));
     auto_var(fs20, fs20Decoder(counter));
     auto_var(visonic, visonicDecoder(counter));
-    auto_var(pingInterval, periodic(rt, 30_s));
+    auto_var(pingInterval, periodic(rt, 10_s));
     auto_var(rfmWatchdog, deadline(rt, 60000_ms));
 
     typedef Delegate<This, decltype(pinTX), &This::pinTX,
@@ -63,11 +90,10 @@ struct RFRelay {
             Delegate<This, decltype(logger), &This::logger,
             Delegate<This, decltype(counter), &This::counter>>>>>> Handlers;
 
-    uint8_t rfmWatchdogCount = 0;
-    uint8_t packets = 0;
     auto_var(blink, deadline(rt));
     bool blinkOn = false;
     uint8_t blinkIdx = 0;
+    Ping ping = {};
 
     typedef uint8_t PacketType;
     static constexpr PacketType TYPE_RFM12 = 'R';
@@ -75,20 +101,23 @@ struct RFRelay {
 	static constexpr PacketType TYPE_VISONIC = 'V';
 	static constexpr PacketType TYPE_PING = 'P';
 	static constexpr PacketType TYPE_MSG = 'M';
+    static constexpr PacketType TYPE_PING2 = 'Q';
 
     void send() {
-        static uint8_t count = 0;
         FS20Packet fs20Packet;
         if (fs20.read(&fs20Packet)) {
+            ping.packets_in++;
             esp.write(TYPE_FS20, &fs20Packet);
         }
 
         VisonicPacket visonicPacket;
         if (visonic.read(&visonicPacket)) {
+            ping.packets_in++;
             esp.write(TYPE_VISONIC, &visonicPacket);
         }
 
         if (rfm.in().hasContent()) {
+            ping.packets_in++;
             log::debug('i',dec(rfm.in().getSize()));
             rfmWatchdog.schedule();
             rfm.in().readStart();
@@ -99,11 +128,10 @@ struct RFRelay {
 
         if (pingInterval.isNow()) {
             log::debug(F("ping"));
-            count++;
-            // TODO include here: OOK overflows, ESP watchdog fires, NODE ID (4 bytes)
-            // TODO describe protocol in a struct, properly.
-            auto mac = esp.getMACAddress();
-            esp.write(TYPE_PING, &mac, ',', dec(count), ',', dec(packets), ',', dec(esp.getWatchdogCount()), ',', dec(rfmWatchdogCount));
+            ping.espWatchdog = esp.getWatchdogCountAndReset();
+            ping.mac = esp.getMACAddress();
+            esp.write(TYPE_PING2, &ping);
+            ping.reset();
         }
     }
 
@@ -117,7 +145,6 @@ struct RFRelay {
         pinLED1.configureAsOutput();
         pinLED2.configureAsOutput();
     }
-    uint8_t prevState = 0;
 
     void loop() {
         if (blink.isNow()) {
@@ -133,15 +160,9 @@ struct RFRelay {
             }
         }
 
-        uint8_t s = static_cast<uint8_t>(esp.getState());
-        if (prevState != s) {
-            log::debug(F("-> "), dec(s));
-            prevState = s;
-        }
-
         pinLED0.setHigh(esp.isConnecting() ? blinkOn : esp.isConnected());
-        pinLED1.setHigh(esp.isSending());
-        pinLED2.setHigh(esp.isReceiving());
+        pinLED1.setHigh(esp.isSending() || rfm.isReceiving());
+        pinLED2.setHigh(esp.isReceiving() || rfm.isSending());
 
         counter.onMax(10, [&] (Pulse pulse) {
             fs20.apply(pulse);
@@ -149,38 +170,49 @@ struct RFRelay {
         });
         esp.loop();
 
-        log::flush();
         if (esp.isConnected()) {
             send();
         }
 
         if (rfmWatchdog.isNow()) {
-            rfmWatchdogCount++;
+            ping.rfmWatchdog++;
             rfm.reset(band);
             rfmWatchdog.schedule();
         }
 
-        esp.read(Nested([&] (auto read) -> ReadResult {
-            uint8_t type;
+        if (esp.in().hasContent()) {
+            esp.in().read(Nested([&] (auto read) -> ReadResult {
+                uint8_t type;
+                if (!read(&type)) {
+                    log::debug('e', dec(type));
+                    return ReadResult::Valid;
+                }
 
-            if (!read(&type)) return ReadResult::Invalid;
-            switch(type) {
-            case TYPE_FS20: {
-                FS20Packet inPacket;
-                if (!read(&inPacket)) return ReadResult::Invalid;
-				rfm.write_fs20(inPacket);
-				packets++;
-				break;
-            }
-            case TYPE_RFM12: {
-            	uint8_t header;
-            	if (!read(&header)) return ReadResult::Invalid;
-            	rfm.write_fsk(header, read);
-            	packets++;
-            }
-            }
-            return ReadResult::Valid;
-        }));
+                switch(type) {
+                    case TYPE_FS20: {
+                        FS20Packet inPacket;
+                        if (!read(&inPacket)) {
+                            log::debug('e','f');
+                            return ReadResult::Valid;
+                        }
+                        rfm.write_fs20(inPacket);
+                        ping.packets_out++;
+                        break;
+                    }
+                    case TYPE_RFM12: {
+                        uint8_t header;
+                        if (!read(&header)) {
+                            log::debug('e','r');
+                            return ReadResult::Valid;
+                        }
+                        rfm.write_fsk(header, read);
+                        ping.packets_out++;
+                        break;
+                    }
+                }
+                return ReadResult::Valid;
+            }));
+        }
     }
 
     int main() {

@@ -3,3 +3,4 @@
 RUN_APP(RFRelay)
 
 LOGGING_TO(app.logger)
+//LOGGING_DISABLED()
