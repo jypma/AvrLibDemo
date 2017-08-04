@@ -36,3 +36,4 @@ src/irdecode-linux/irdecode
 target
 *.eeprom
 *.bak
+*.kicad_pcb-bak
