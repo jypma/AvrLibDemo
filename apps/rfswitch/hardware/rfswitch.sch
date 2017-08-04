@@ -412,10 +412,8 @@ Wire Wire Line
 	5500 1850 5500 1700
 Wire Wire Line
 	5500 1700 5700 1700
-Text Label 1150 1050 2    60   ~ 0
+Text Label 1800 950  2    60   ~ 0
 LINE
-Wire Wire Line
-	1150 1050 1150 1200
 Text Label 1150 1600 2    60   ~ 0
 NEUTRAL
 Wire Wire Line
@@ -1436,4 +1434,7 @@ Wire Wire Line
 	10350 2950 10400 2950
 Wire Wire Line
 	10050 2950 10000 2950
+Wire Wire Line
+	1800 950  1800 1100
+Connection ~ 1800 1100
 $EndSCHEMATC
