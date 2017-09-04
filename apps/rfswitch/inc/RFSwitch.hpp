@@ -11,7 +11,8 @@
 #include "Passive/SupplyVoltage.hpp"
 #include "Dallas/DS18x20.hpp"
 #include "Tasks/TaskState.hpp"
-#include "HopeRF/RxState.hpp"
+#include "HopeRF/RxTxState.hpp"
+#include "Serial/FrequencyCounter.hpp"
 
 using namespace HAL::Atmel;
 using namespace Time;
@@ -20,17 +21,26 @@ using namespace Mechanic;
 using namespace Passive;
 using namespace Streams;
 using namespace Dallas;
+using namespace Serial;
 
 struct State {
     uint8_t outputs;
+    uint8_t inputs;
 
     typedef Protobuf::Protocol<State> P;
 
     typedef P::Message<
-        P::Varint<1, uint8_t, &State::outputs>
+        P::Varint<1, uint8_t, &State::outputs>,
+        P::Varint<2, uint8_t, &State::inputs>
     > DefaultProtocol;
 
-    constexpr bool operator != (const State &b) { return b.outputs != outputs; }
+    constexpr bool operator != (const State &b) const {
+        return b.outputs != outputs || b.inputs != b.outputs;
+    }
+
+    State setInputs(uint8_t i) {
+        return { outputs, i };
+    }
 };
 
 struct RFSwitch {
@@ -54,9 +64,22 @@ struct RFSwitch {
     auto_var(pinOut2, PinPD6());
     auto_var(pinOut3, PinPD7());
 
+    auto_var(pinIn0, PinPC0::withInterruptOnChange());
+    auto_var(pinIn1, PinPC1::withInterruptOnChange());
+    auto_var(pinIn2, PinPC2::withInterruptOnChange());
+    auto_var(pinIn3, PinPC3::withInterruptOnChange());
+
+    FrequencyCounter<decltype(pinIn0), decltype(rt)> freqCnt0 = { pinIn0, rt };
+    FrequencyCounter<decltype(pinIn1), decltype(rt)> freqCnt1 = { pinIn1, rt };
+    FrequencyCounter<decltype(pinIn2), decltype(rt)> freqCnt2 = { pinIn2, rt };
+    FrequencyCounter<decltype(pinIn3), decltype(rt)> freqCnt3 = { pinIn3, rt };
+
     const uint8_t invertMask = read(&EEPROM::inverted);
+    const uint8_t toggleMask = read(&EEPROM::auto_toggle);
     const uint16_t nodeId = 'r' << 8 | read(&EEPROM::id);
-    RxState<decltype(rfm), State> rxState = { rfm, nodeId, { 0 } };
+    RxTxState<decltype(rfm), decltype(rt), State> rxState = { rfm, rt, { 0, 0 }, nodeId };
+
+    auto_var(pollInputs, periodic(rt, 100_ms));
 
     typedef Delegate<This, decltype(rt), &This::rt,
             Delegate<This, decltype(rfm), &This::rfm,
@@ -82,6 +105,18 @@ struct RFSwitch {
     void loop() {
         TaskState rfmState = rfm.getTaskState();
 
+        if (pollInputs.isNow()) {
+            uint8_t inputs = (freqCnt0.getFrequency().isDefined() ? 1 : 0) |
+                             (freqCnt1.getFrequency().isDefined() ? 2 : 0) |
+                             (freqCnt2.getFrequency().isDefined() ? 4 : 0) |
+                             (freqCnt3.getFrequency().isDefined() ? 8 : 0);
+            auto old = rxState.getState();
+            for (int bit = 1; bit <= 8; bit <<= 1) {
+                if ((toggleMask & bit) && ((inputs & bit) != (old.inputs & bit))) old.outputs ^= bit;
+            }
+            rxState.setState(old.setInputs(inputs));
+        }
+
         while (rfm.in().hasContent()) {
             if (rxState.isStateChanged()) {
                 State state = rxState.getState();
@@ -93,8 +128,7 @@ struct RFSwitch {
             }
         }
 
-        log::flush();
-        power.sleepUntilTasks(rfmState);
+        power.sleepUntilTasks(rfmState, pollInputs);
     }
 
     int main() {
@@ -103,7 +137,11 @@ struct RFSwitch {
         pinOut1.configureAsOutputLow();
         pinOut2.configureAsOutputLow();
         pinOut3.configureAsOutputLow();
-        outputState({ 0 });
+        pinIn0.configureAsInputWithPullup();
+        pinIn1.configureAsInputWithPullup();
+        pinIn2.configureAsInputWithPullup();
+        pinIn3.configureAsInputWithPullup();
+        outputState(rxState.getState());
         while(true) loop();
     }
 };
