@@ -62,6 +62,8 @@ struct RF12Mon {
     }
 
     int main() {
+        log::debug(F("RF12Mon"));
+        log::flush();
         pinLED.configureAsOutputLow();
         pinLED.timerComparator().setOutput(FastPWMOutputMode::connected);
         pinLED.timerComparator().setTargetFromNextRun(0);
