@@ -7,7 +7,9 @@ OBJDUMP=avr-objdump
 AVRSIZE=avr-size
 AVRDUDE=avrdude
 PROGRAMMER_TYPE=arduino
-PROGRAMMER_ARGS=-P/dev/ttyUSB0 -b115200
+BAUD=57600
+PBAUD=115200
+PROGRAMMER_ARGS=-P/dev/ttyUSB0 -b$(PBAUD)
 LFUSE = 0xFF
 HFUSE = 0xDE
 EFUSE = 0x05
@@ -107,7 +109,6 @@ fuses:
 show_fuses:
 	$(AVRDUDE) -c $(PROGRAMMER_TYPE) -p $(MCU) $(PROGRAMMER_ARGS) -nv	
 
-BAUD=57600
 serial:
 	stty -F /dev/ttyUSB0 $(BAUD) raw -clocal -echo
 	cat /dev/ttyUSB0 | awk '{ print strftime("%c: "), $$0; fflush(); }' | tee target/serial.log
