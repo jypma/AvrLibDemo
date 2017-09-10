@@ -104,14 +104,14 @@ struct NimhCharge {
 
     State state = CHARGE;
     uint16_t lastSupply = 5;
-    int16_t lastTemp = 1000;
+    Option<int16_t> lastTemp = none();
     uint16_t charges = 0;
 
     static constexpr uint16_t current = 700;  // mA
     static constexpr uint16_t capacity = 2000; // mAh
 
     static constexpr auto chargeTime = 10_sec;
-    static constexpr auto waitTime = 60_min;   // wait this long before deciding to top up again
+    static constexpr auto waitTime = 30_min;   // wait this long before deciding to top up again
 
     static constexpr uint16_t cutoffSupply = 6300; // mV
 
@@ -135,7 +135,7 @@ struct NimhCharge {
 
         lastSupply = 5;
         charges = 0;
-        lastTemp = 1000;
+        lastTemp = none();
     }
 
     void charge() {
@@ -163,7 +163,7 @@ struct NimhCharge {
         auto t = temp.getTemperature();
         log::debug(F("Temp: "), dec(t));
         if (tempTick.isNow()) {
-            if (t > int16_t(lastTemp + 11)) {   // 1.1°C / min
+            if ((lastTemp + 11) <= t) {   // 1.1°C / min
                 log::debug(F("  dT!"));
                 lastTemp = t.get();
                 done(TEMP_DT);
@@ -248,14 +248,6 @@ struct NimhCharge {
             log::debug('i');
             // ignore all other incoming RFM packets
             rfm.in().readStart();
-            /*
-            while (rfm.in().getReadAvailable() > 0) {
-                uint8_t ch;
-                rfm.in().read(&ch);
-                pinTX.write(dec(ch), ' ');
-            }
-            pinTX.write('\n');
-            */
             rfm.in().readEnd();
         }
 
