@@ -132,6 +132,8 @@ struct NimhCharge {
         m.temp = lastTemp;
         m.stopReason = reason;
         rfm.write_fsk(42, &m);
+        rfm.write_fsk(42, &m);
+        rfm.write_fsk(42, &m);
 
         lastSupply = 5;
         charges = 0;
