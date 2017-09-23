@@ -110,16 +110,16 @@ struct RFSwitch {
                              (freqCnt1.getFrequency().isDefined() ? 2 : 0) |
                              (freqCnt2.getFrequency().isDefined() ? 4 : 0) |
                              (freqCnt3.getFrequency().isDefined() ? 8 : 0);
-            auto old = rxState.getState();
+            auto old = rxState.get();
             for (int bit = 1; bit <= 8; bit <<= 1) {
                 if ((toggleMask & bit) && ((inputs & bit) != (old.inputs & bit))) old.outputs ^= bit;
             }
-            rxState.setState(old.setInputs(inputs));
+            rxState.set(old.setInputs(inputs));
         }
 
         while (rfm.in().hasContent()) {
             if (rxState.isStateChanged()) {
-                State state = rxState.getState();
+                State state = rxState.get();
                 outputState(state);
             } else {
                 log::debug(F("Ign"));
@@ -141,7 +141,7 @@ struct RFSwitch {
         pinIn1.configureAsInputWithPullup();
         pinIn2.configureAsInputWithPullup();
         pinIn3.configureAsInputWithPullup();
-        outputState(rxState.getState());
+        outputState(rxState.get());
         while(true) loop();
     }
 };
