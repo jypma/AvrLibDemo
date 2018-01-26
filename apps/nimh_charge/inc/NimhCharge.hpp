@@ -10,7 +10,7 @@
 #include "Tasks/TaskState.hpp"
 #include "Dallas/DS18x20.hpp"
 #include "HopeRF/RFM12.hpp"
-#include "HopeRF/RxState.hpp"
+#include "HopeRF/RxTxState.hpp"
 
 using namespace HAL::Atmel;
 using namespace Time;
@@ -19,7 +19,7 @@ using namespace Streams;
 using namespace Dallas;
 using namespace HopeRF;
 
-enum State {
+enum ChargeState {
     CHARGE, COOLDOWN, WAIT
 };
 
@@ -91,7 +91,7 @@ struct NimhCharge {
     auto_var(pinSupplyCurrentSign, JeeNodePort1A());
 
     auto_var(rfm, (rfm12<200,200>(spi, pinRFM12_SS, pinRFM12_INT, timer0.comparatorA(), RFM12Band::_868Mhz)));
-    auto_var(outputs, (RxState<decltype(rfm), Outputs>(rfm, 'n' << 8 | read(&EEPROM::id), {})));
+    auto_var(outputs, (RxTxState<decltype(rfm), decltype(rt), Outputs>(rfm, rt, {}, 'n' << 8 | read(&EEPROM::id))));
 
     auto_var(supplyVoltage, (SupplyVoltage<10000, 1000, &EEPROM::bandgapVoltage>(adc, pinSupply)));
     auto_var(solarVoltage, (SupplyVoltage<10000, 500, &EEPROM::bandgapVoltage>(adc, pinSolar)));
@@ -99,19 +99,23 @@ struct NimhCharge {
     auto_var(tempWire, OneWireParasitePower(pinTemp, rt));
     auto_var(temp, SingleDS18x20(tempWire));
 
-    auto_var(stateTick, deadline(rt));
+    auto_var(chargeTick, deadline(rt));
+    auto_var(radioTick, deadline(rt));
     auto_var(tempTick, periodic(rt, 1_min));
 
-    State state = CHARGE;
+    ChargeState state = CHARGE;
     uint16_t lastSupply = 5;
     Option<int16_t> lastTemp = none();
     uint16_t charges = 0;
+    bool isRadioOn = false;
 
     static constexpr uint16_t current = 700;  // mA
     static constexpr uint16_t capacity = 2000; // mAh
 
     static constexpr auto chargeTime = 10_sec;
     static constexpr auto waitTime = 30_min;   // wait this long before deciding to top up again
+    static constexpr auto radioOnTime = 1_sec;
+    static constexpr auto radioOffTime = 59_sec;
 
     static constexpr uint16_t cutoffSupply = 6300; // mV
 
@@ -124,7 +128,7 @@ struct NimhCharge {
     void done(uint8_t reason) {
         pinDisable.setHigh();
         state = WAIT;
-        stateTick.schedule(waitTime);
+        chargeTick.schedule(waitTime);
 
         ChargeStatus m;
         m.sender = 'n' << 8 | read(&EEPROM::id);
@@ -150,7 +154,7 @@ struct NimhCharge {
         } else {
             state = CHARGE;
             pinDisable.setLow();
-            stateTick.schedule(chargeTime);
+            chargeTick.schedule(chargeTime);
         }
     }
 
@@ -158,7 +162,7 @@ struct NimhCharge {
         log::debug(F("off"));
         state = COOLDOWN;
         pinDisable.setHigh();
-        stateTick.schedule(2_sec);
+        chargeTick.schedule(2_sec);
 
         temp.measure();
         while (temp.isMeasuring()) ;
@@ -223,10 +227,26 @@ struct NimhCharge {
         }
     }
 
+    void radioOn() {
+        log::debug(F("rOn"));
+        rfm.onIdleListen();
+        isRadioOn = true;
+        outputs.requestLatest();
+        radioTick.schedule(radioOnTime);
+    }
+
+    void radioOff() {
+        log::debug(F("rOff"));
+        rfm.onIdleSleep();
+        isRadioOn = false;
+        radioTick.schedule(radioOffTime);
+    }
+
     uint8_t ints = 0;
     void loop() {
         TaskState rfmState = rfm.getTaskState();
-        TaskState mainState = TaskState(stateTick, SleepMode::POWER_DOWN);
+        TaskState chargeState = TaskState(chargeTick, SleepMode::POWER_DOWN);
+        TaskState radioState = TaskState(radioTick, SleepMode::POWER_DOWN);
 
         supplyVoltage.stopOnLowBattery(6000, [this] {
             log::debug(F("Oh-oh"));
@@ -239,11 +259,17 @@ struct NimhCharge {
         });
 
         if (outputs.isStateChanged()) {
-            auto out = outputs.getState().outputs;
+            auto out = outputs.get().outputs;
             log::debug('o', dec(out));
             bool enable = (lastSupply < 100 || lastSupply >= cutoffSupply);
             pinOut1.setHigh(enable && ((out & 1) != 0));
             pinOut2.setHigh(enable && ((out & 2) != 0));
+        }
+        if (isRadioOn && outputs.isSynchronized()) {
+            log::flush();
+            log::debug('s');
+            log::flush();
+            radioOff();
         }
 
         if (rfm.in().hasContent()) {
@@ -253,7 +279,7 @@ struct NimhCharge {
             rfm.in().readEnd();
         }
 
-        if (stateTick.isNow()) {
+        if (chargeTick.isNow()) {
             switch(state) {
             case CHARGE: cooldown(); break;
             case COOLDOWN: measure(); break;
@@ -269,11 +295,19 @@ struct NimhCharge {
             }
         }
 
-        power.sleepUntilTasks(rfmState, mainState);
+        if (radioTick.isNow()) {
+            if (isRadioOn) {
+                radioOff();
+            } else {
+                radioOn();
+            }
+        }
+        power.sleepUntilTasks(rfmState, chargeState, radioState);
     }
 
     int main() {
         log::debug(F("Charger "));
+        radioOn();
         temp.measure();
         pinDisable.configureAsOutputHigh();
         pinOut1.configureAsOutputLow();
