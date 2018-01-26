@@ -6,10 +6,12 @@ OBJCOPY=avr-objcopy
 OBJDUMP=avr-objdump
 AVRSIZE=avr-size
 AVRDUDE=avrdude
+FUSE_PROGRAMMER_TYPE=usbasp
 PROGRAMMER_TYPE=arduino
 BAUD=57600
 PBAUD=115200
 PROGRAMMER_ARGS=-P/dev/ttyUSB0 -b$(PBAUD)
+FUSE_PROGRAMMER_ARGS=
 LFUSE = 0xFF
 HFUSE = 0xDE
 EFUSE = 0x05
@@ -49,6 +51,7 @@ LDFLAGS += -Wl,--gc-sections
 ## LDFLAGS += -Wl,-u,vfprintf -lprintf_flt -lm  ## for floating-point printf
 ## LDFLAGS += -Wl,-u,vfprintf -lprintf_min      ## for smaller printf
 
+#LDLIBS=
 LDLIBS = -L$(AVRLIB)/target/$(MCU) -lAvrLib
 
 TARGET_ARCH = -mmcu=$(MCU)
@@ -98,23 +101,24 @@ flash: $(TARGET).hex size
 	$(AVRDUDE) -c $(PROGRAMMER_TYPE) -p $(MCU) $(PROGRAMMER_ARGS) -U flash:w:$<
 
 flash_eeprom: $(EEPROM_FILE)
-	$(AVRDUDE) -c $(PROGRAMMER_TYPE) -p $(MCU) $(PROGRAMMER_ARGS) -U eeprom:w:$<
+	$(AVRDUDE) -c $(FUSE_PROGRAMMER_TYPE) -p $(MCU) $(FUSE_PROGRAMMER_ARGS) -U eeprom:w:$<
 
-upload: $(TARGET).hex $(EEPROM_FILE) size
-	$(AVRDUDE) -c $(PROGRAMMER_TYPE) -p $(MCU) $(PROGRAMMER_ARGS) -U flash:w:$(TARGET).hex -U eeprom:w:$(EEPROM_FILE)
+#need to find the old bootloader that supports eeprom first
+#upload: $(TARGET).hex $(EEPROM_FILE) size
+#	$(AVRDUDE) -c $(PROGRAMMER_TYPE) -p $(MCU) $(PROGRAMMER_ARGS) -U eeprom:w:$(EEPROM_FILE) -U flash:w:$(TARGET).hex 
 
 fuses: 
-	$(AVRDUDE) -c $(PROGRAMMER_TYPE) -p $(MCU) $(PROGRAMMER_ARGS) $(FUSE_STRING)
+	$(AVRDUDE) -c $(FUSE_PROGRAMMER_TYPE) -p $(MCU) $(FUSE_PROGRAMMER_ARGS) $(FUSE_STRING)
 
 show_fuses:
-	$(AVRDUDE) -c $(PROGRAMMER_TYPE) -p $(MCU) $(PROGRAMMER_ARGS) -nv	
+	$(AVRDUDE) -c $(FUSE_PROGRAMMER_TYPE) -p $(MCU) $(FUSE_PROGRAMMER_ARGS) -nv	
 
 serial:
 	stty -F /dev/ttyUSB0 $(BAUD) raw -clocal -echo
 	cat /dev/ttyUSB0 | awk '{ print strftime("%c: "), $$0; fflush(); }' | tee target/serial.log
 
 ## Set the EESAVE fuse byte to preserve EEPROM across flashes
-set_eeprom_save_fuse: HFUSE = 0xD7
+set_eeprom_save_fuse: HFUSE = 0xD6
 set_eeprom_save_fuse: FUSE_STRING = -U hfuse:w:$(HFUSE):m
 set_eeprom_save_fuse: fuses
 
