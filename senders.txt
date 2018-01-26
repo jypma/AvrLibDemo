@@ -5,5 +5,6 @@ Q  RoomSensor
 R  MeterBoxSensor
 V  GardenValve
 d  DoorSensor
-r  RFSwitch
+r  RFSwitch (outputs)
+f  RFSwitch (inputs)
 n  NimhCharge

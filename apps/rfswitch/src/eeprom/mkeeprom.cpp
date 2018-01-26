@@ -7,12 +7,13 @@
 EEPROM eeprom;
 
 int main(int argc, char * argv[]) {
-	if (argc != 3) {
-		std::cerr << "Usage: mkeeprom id inverted" << (argc-1)<< std::endl;
+	if (argc != 4) {
+		std::cerr << "Usage: mkeeprom id inverted autotoggle" << (argc-1)<< std::endl;
 		return 1;
 	}
 	eeprom.id = argv[1][0];
     eeprom.inverted = std::stoi(argv[2]);
+    eeprom.auto_toggle = std::stoi(argv[3]);
     fwrite(&eeprom, sizeof(EEPROM), 1, stdout);
     return 0;
 }
