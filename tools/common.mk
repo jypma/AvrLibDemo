@@ -12,6 +12,7 @@ BAUD=57600
 PBAUD=115200
 PROGRAMMER_ARGS=-P/dev/ttyUSB0 -b$(PBAUD)
 FUSE_PROGRAMMER_ARGS=
+BOOTLOADER=../../tools/optiboot_atmega328.hex
 LFUSE = 0xFF
 HFUSE = 0xDE
 EFUSE = 0x05
@@ -100,7 +101,7 @@ size:  $(TARGET).elf
 flash: $(TARGET).hex size
 	$(AVRDUDE) -c $(PROGRAMMER_TYPE) -p $(MCU) $(PROGRAMMER_ARGS) -U flash:w:$<
 
-flash_eeprom: $(EEPROM_FILE)
+eeprom: $(EEPROM_FILE)
 	$(AVRDUDE) -c $(FUSE_PROGRAMMER_TYPE) -p $(MCU) $(FUSE_PROGRAMMER_ARGS) -U eeprom:w:$<
 
 #need to find the old bootloader that supports eeprom first
@@ -131,5 +132,7 @@ clear_eeprom_save_fuse: fuses
 rtags:
 	$(MAKE) -nk $(OBJECTS) | rc -c -
 
-bootloader:
-# /home/jan/.arduino15/packages/arduino/tools/avrdude/6.3.0-arduino9/bin/avrdude -C/home/jan/.arduino15/packages/arduino/tools/avrdude/6.3.0-arduino9/etc/avrdude.conf -v -patmega328p -cusbasp -Pusb -Uflash:w:/home/jan/.arduino15/packages/arduino/hardware/avr/1.6.20/bootloaders/optiboot/optiboot_atmega328.hex:i -Ulock:w:0x0F:m 
+bootloader: fuses
+	$(AVRDUDE) -c $(FUSE_PROGRAMMER_TYPE) -p $(MCU) $(FUSE_PROGRAMMER_ARGS) -Uflash:w:$(BOOTLOADER):i \
+	-U:lock:w:0x0F:m
+
