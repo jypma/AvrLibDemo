@@ -92,7 +92,7 @@ $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
 
 disassemble: $(TARGET).lst
-disasm: disassemble
+	less $(TARGET).lst
 
 size:  $(TARGET).elf
 	$(AVRSIZE) -C --mcu=$(MCU) $(TARGET).elf
@@ -128,3 +128,8 @@ clear_eeprom_save_fuse: fuses
 
 -include $(BUILDDIR)/*.d
 
+rtags:
+	$(MAKE) -nk $(OBJECTS) | rc -c -
+
+bootloader:
+# /home/jan/.arduino15/packages/arduino/tools/avrdude/6.3.0-arduino9/bin/avrdude -C/home/jan/.arduino15/packages/arduino/tools/avrdude/6.3.0-arduino9/etc/avrdude.conf -v -patmega328p -cusbasp -Pusb -Uflash:w:/home/jan/.arduino15/packages/arduino/hardware/avr/1.6.20/bootloaders/optiboot/optiboot_atmega328.hex:i -Ulock:w:0x0F:m 
