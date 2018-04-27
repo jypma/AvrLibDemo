@@ -32,6 +32,7 @@ struct GardenWater {
   auto_var(pinValvePower, JeeNodePort1D());
   auto_var(pinValveOn, JeeNodePort2D());
   auto_var(pinValveOff, JeeNodePort3D());
+  auto_var(print, periodic(rt, 1_min));
 
   WaterState state = PAUSE;
   const uint8_t waterPerDay = 1;
@@ -88,6 +89,12 @@ struct GardenWater {
     setTimeout();
   }
 
+  void onPrint() {
+    log::debug(dec(uint8_t(state)), F(" for "),
+               dec(uint16_t(timeout.timeLeftIfScheduled().getOrElse(0) / 60000)),
+               F("min"));
+  }
+
   int main() {
     pinValvePower.configureAsOutputLow();
     pinValveOn.configureAsInputWithoutPullup();
@@ -95,9 +102,10 @@ struct GardenWater {
 
     setTimeout();
     auto timeoutTask = timeout.invoking<This, &This::onTimeout>(*this);
+    auto printTask = print.invoking<This, &This::onPrint>(*this);
     log::debug(F("GardenWater"));
     while (true) {
-      loopTasks(power, timeoutTask);
+      loopTasks(power, timeoutTask, printTask);
     }
   }
 };
