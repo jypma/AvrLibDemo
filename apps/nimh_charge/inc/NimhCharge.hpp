@@ -11,6 +11,8 @@
 #include "Dallas/DS18x20.hpp"
 #include "HopeRF/RFM12.hpp"
 #include "HopeRF/RxTxState.hpp"
+#include "Tasks/loop.hpp"
+#include "Tasks/Task.hpp"
 
 using namespace HAL::Atmel;
 using namespace Time;
@@ -64,7 +66,7 @@ struct Outputs {
     > DefaultProtocol;
 };
 
-struct NimhCharge {
+struct NimhCharge: public Task {
     typedef NimhCharge This;
     typedef Logging::Log<Loggers::Main> log;
 
@@ -244,10 +246,6 @@ struct NimhCharge {
 
     uint8_t ints = 0;
     void loop() {
-        TaskState rfmState = rfm.getTaskState();
-        TaskState chargeState = TaskState(chargeTick, SleepMode::POWER_DOWN);
-        TaskState radioState = TaskState(radioTick, SleepMode::POWER_DOWN);
-
         supplyVoltage.stopOnLowBattery(6000, [this] {
             log::debug(F("Oh-oh"));
             rfm.onIdleSleep();
@@ -278,8 +276,9 @@ struct NimhCharge {
             rfm.in().readStart();
             rfm.in().readEnd();
         }
+    }
 
-        if (chargeTick.isNow()) {
+  void onCharge() {
             switch(state) {
             case CHARGE: cooldown(); break;
             case COOLDOWN: measure(); break;
@@ -293,16 +292,14 @@ struct NimhCharge {
                 measure();
                 break;
             }
-        }
+  }
 
-        if (radioTick.isNow()) {
+  void onRadio() {
             if (isRadioOn) {
                 radioOff();
             } else {
                 radioOn();
             }
-        }
-        power.sleepUntilTasks(rfmState, chargeState, radioState);
     }
 
     int main() {
@@ -326,6 +323,11 @@ struct NimhCharge {
         measure();
         log::debug(F("Init done"));
         log::flush();
-        while(true) loop();
+
+        auto chargeTask = chargeTick.invoking<This, &This::onCharge>(*this);
+        auto radioTask = radioTick.invoking<This, &This::onRadio>(*this);
+        while(true) {
+          loopTasks(power, *this, rfm, chargeTask, radioTask);
+        }
     }
 };

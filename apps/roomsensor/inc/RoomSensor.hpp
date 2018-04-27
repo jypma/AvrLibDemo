@@ -12,6 +12,8 @@
 #include "Option.hpp"
 #include "ROHM/BH1750.hpp"
 #include "PIR/HCSR501.hpp"
+#include "Tasks/Task.hpp"
+#include "Tasks/loop.hpp"
 
 #define auto_var(name, expr) decltype(expr) name = expr
 
@@ -49,7 +51,7 @@ struct Measurement {
 	> DefaultProtocol;
 };
 
-struct RoomSensor {
+struct RoomSensor: public Task {
     typedef RoomSensor This;
     typedef Logging::Log<Loggers::Main> log;
 
@@ -109,88 +111,72 @@ struct RoomSensor {
         rfm.onIdleSleep();
     }
 
-    auto getTaskState() {
-    	return TaskState(nextMeasurement, SleepMode::POWER_DOWN);
+  void loop() {
+    supplyVoltage.stopOnLowBattery(3000, [&] {
+        log::debug(F("**LOW**"));
+        log::flush();
+      });
+
+    if (pir.isMotionDetected()) {
+      Measurement m = {};
+      log::debug(F("ints: "), dec(pir.getInts()));
+      log::debug(F("Motion!"));
+      m.motion = 1;
+      for (int i = 0; i < 10; i++) supplyVoltage.get();
+      m.supply = supplyVoltage.get();
+      log::debug(F("Suppl: "), dec(m.supply));
+      seq++;
+      m.seq = seq;
+      m.sender = 'Q' << 8 | read(&EEPROM::id);
+      if (m.supply >= uint16_t(3300)) {
+        // PIR sensor gets unreliable when dropping below 3.3V
+        rfm.write_fsk(42, &m);
+      }
     }
 
-    void loop() {
-        supplyVoltage.stopOnLowBattery(3000, [&] {
-        	log::debug(F("**LOW**"));
-        	log::flush();
-        });
-        dht.loop();
-        pir.loop();
-        bh.loop();
-
-        if (pir.isMotionDetected()) {
-        	Measurement m = {};
-        	log::debug(F("ints: "), dec(pir.getInts()));
-            log::debug(F("Motion!"));
-        	m.motion = 1;
-            for (int i = 0; i < 10; i++) supplyVoltage.get();
-            m.supply = supplyVoltage.get();
-            log::debug(F("Suppl: "), dec(m.supply));
-            seq++;
-            m.seq = seq;
-            m.sender = 'Q' << 8 | read(&EEPROM::id);
-            if (m.supply >= uint16_t(3300)) {
-                // PIR sensor gets unreliable when dropping below 3.3V
-                rfm.write_fsk(42, &m);
-            }
-        }
-
-        if (rfm.isIdle()) {
-        	pir.enable();
-        }
-
-        auto dhtState = dht.getTaskState();
-        auto bhState = bh.getTaskState();
-        auto rfmState = rfm.getTaskState();
-        auto pirState = pir.getTaskState();
-        auto measureState = getTaskState();
-
-        if (measuring && dhtState.isIdle() && bhState.isIdle()) {
-        	Measurement m = {};
-        	log::debug(F("ints: "), dec(pir.getInts()));
-            pinTX.flush();
-            measuring = false;
-
-            for (int i = 0; i < 10; i++) supplyVoltage.get();
-            m.supply = supplyVoltage.get();
-            log::debug(F("Suppl: "), dec(m.supply));
-            if (m.supply > 4700U) {
-            	// Don't send supply if we're on AC
-            	m.supply = none();
-            }
-
-            m.humidity = dht.getHumidity();
-            log::debug(F("Hum  : "), dec(m.humidity));
-
-            m.temp = dht.getTemperature();
-            log::debug(F("Temp : "), dec(m.temp));
-            log::flush();
-
-            m.lux = bh.getLightLevel();
-            log::debug(F("Lux  : "), dec(m.lux));
-        	log::flush();
-
-        	seq++;
-            m.seq = seq;
-            m.sender = 'Q' << 8 | read(&EEPROM::id);
-            pir.disable();
-            rfm.write_fsk(42, &m);
-            nextMeasurement.schedule();
-        } else if (nextMeasurement.isNow()) {
-            measure();
-        } else {
-        	power.sleepUntilTasks(dhtState, bhState, rfmState, measureState, pirState);
-        }
+    if (rfm.isIdle()) {
+      pir.enable();
     }
+
+    if (measuring && dht.isIdle() && bh.isIdle()) {
+      Measurement m = {};
+      log::debug(F("ints: "), dec(pir.getInts()));
+      pinTX.flush();
+      measuring = false;
+
+      for (int i = 0; i < 10; i++) supplyVoltage.get();
+      m.supply = supplyVoltage.get();
+      log::debug(F("Suppl: "), dec(m.supply));
+      if (m.supply > 4700U) {
+        // Don't send supply if we're on AC
+        m.supply = none();
+      }
+
+      m.humidity = dht.getHumidity();
+      log::debug(F("Hum  : "), dec(m.humidity));
+
+      m.temp = dht.getTemperature();
+      log::debug(F("Temp : "), dec(m.temp));
+      log::flush();
+
+      m.lux = bh.getLightLevel();
+      log::debug(F("Lux  : "), dec(m.lux));
+      log::flush();
+
+      seq++;
+      m.seq = seq;
+      m.sender = 'Q' << 8 | read(&EEPROM::id);
+      pir.disable();
+      rfm.write_fsk(42, &m);
+      nextMeasurement.schedule();
+    }
+  }
 
     int main() {
-        while(true) {
-        	loop();
-        }
+      auto measureTask = nextMeasurement.invoking<This, &This::measure>(*this);
+      while(true) {
+        loopTasks(power, measureTask, dht, bh, rfm, pir, *this);
+      }
     }
 
 };

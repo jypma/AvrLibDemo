@@ -71,12 +71,12 @@ struct RFSwitch: public Task {
     auto_var(pinIn1, PinPC1::withInterruptOnChange());
     auto_var(pinIn2, PinPC2::withInterruptOnChange());
     auto_var(pinIn3, PinPC3::withInterruptOnChange());
-
+/*
     FrequencyCounter<decltype(pinIn0), decltype(rt)> freqCnt0 = { pinIn0, rt };
     FrequencyCounter<decltype(pinIn1), decltype(rt)> freqCnt1 = { pinIn1, rt };
     FrequencyCounter<decltype(pinIn2), decltype(rt)> freqCnt2 = { pinIn2, rt };
     FrequencyCounter<decltype(pinIn3), decltype(rt)> freqCnt3 = { pinIn3, rt };
-
+*/
     auto_var(btn0, Button(rt, pinIn0));
     auto_var(btn1, Button(rt, pinIn1));
     auto_var(btn2, Button(rt, pinIn2));
@@ -98,15 +98,15 @@ struct RFSwitch: public Task {
             Delegate<This, decltype(rfm), &This::rfm,
             Delegate<This, decltype(power), &This::power,
             Delegate<This, decltype(pinTX), &This::pinTX,
-            Delegate<This, decltype(freqCnt0), &This::freqCnt0,
-            Delegate<This, decltype(freqCnt1), &This::freqCnt1,
-            Delegate<This, decltype(freqCnt2), &This::freqCnt2,
-            Delegate<This, decltype(freqCnt3), &This::freqCnt3,
+            //Delegate<This, decltype(freqCnt0), &This::freqCnt0,
+            //Delegate<This, decltype(freqCnt1), &This::freqCnt1,
+            //Delegate<This, decltype(freqCnt2), &This::freqCnt2,
+            //Delegate<This, decltype(freqCnt3), &This::freqCnt3,
             Delegate<This, decltype(btn0), &This::btn0,
             Delegate<This, decltype(btn1), &This::btn1,
             Delegate<This, decltype(btn2), &This::btn2,
             Delegate<This, decltype(btn3), &This::btn3
-    >>>>>>>>>>>> Handlers;
+    >>>>>>>> Handlers;
 
     bool shouldBeHigh(State outputs, uint8_t bitMask) {
         return ((outputs.values ^ invertMask) & bitMask) != 0;
@@ -123,7 +123,7 @@ struct RFSwitch: public Task {
         pinOut2.setHigh(high2);
         pinOut3.setHigh(high3);
     }
-
+/*
     void readACInputs() {
         auto oldIn = inputState.get();
         uint8_t inputs = (freqCnt0.getFrequency().isDefined() ? 1 : 0) |
@@ -141,7 +141,7 @@ struct RFSwitch: public Task {
         outputState.set(out);
         applyOutput(out);
     }
-
+*/
     template <uint8_t idx, typename btn_t>
     void readButton(btn_t &btn) {
         if (toggleMode[idx] == DC_TOGGLE || toggleMode[idx] == DC_TOGGLE_LOW) {
@@ -199,11 +199,11 @@ public:
             (toggleMode[2] == AC_TOGGLE) ||
             (toggleMode[3] == AC_TOGGLE);
         while(true) {
-            if (needACInputs) {
-                loopTasks(power, rfm, pollInputs.invoking<This, &This::readACInputs>(*this), *this);
-            } else {
+            //if (needACInputs) {
+            //    loopTasks(power, rfm, pollInputs.invoking<This, &This::readACInputs>(*this), *this);
+            //} else {
                 loopTasks(power, rfm, *this);
-            }
+            //}
         }
     }
 };
