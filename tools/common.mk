@@ -132,7 +132,10 @@ clear_eeprom_save_fuse: fuses
 rtags:
 	$(MAKE) -nk $(OBJECTS) | rc -c -
 
-bootloader: fuses
-	$(AVRDUDE) -c $(FUSE_PROGRAMMER_TYPE) -p $(MCU) $(FUSE_PROGRAMMER_ARGS) -Uflash:w:$(BOOTLOADER):i \
-	-U:lock:w:0x0F:m
+bootloader:-
+	$(AVRDUDE) -c $(FUSE_PROGRAMMER_TYPE) -p $(MCU) $(FUSE_PROGRAMMER_ARGS) \
+	-e -Ulock:w:0x3F:m -Uefuse:w:0xFD:m -Uhfuse:w:0xDE:m -Ulfuse:w:0xFF:m
+
+	$(AVRDUDE) -c $(FUSE_PROGRAMMER_TYPE) -p $(MCU) $(FUSE_PROGRAMMER_ARGS) \
+	-Uflash:w:$(BOOTLOADER):i -Ulock:w:0x0F:m
 
