@@ -35,7 +35,7 @@ struct GardenWater {
   auto_var(print, periodic(rt, 1_min));
 
   WaterState state = PAUSE;
-  const uint8_t waterPerDay = 1;
+  const uint8_t waterPerDay = 2;
   uint8_t waterCount = 0;
 
   typedef Delegate<This, decltype(rt), &This::rt,
@@ -45,9 +45,9 @@ struct GardenWater {
 
   void setTimeout() {
     switch (state) {
-      case PAUSE: timeout.schedule(5_sec); break;
+      case PAUSE: timeout.schedule(1_min); break;
       case TURNING_ON: timeout.schedule(500_ms); break;
-      case WATERING: timeout.schedule(15_min); break;
+      case WATERING: timeout.schedule(5_min); break;
       case TURNING_OFF: timeout.schedule(500_ms); break;
       case SLEEPING: timeout.schedule(1200_min); break; // 20 hours
     }
