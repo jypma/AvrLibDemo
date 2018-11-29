@@ -10,7 +10,7 @@ FUSE_PROGRAMMER_TYPE=usbasp
 PROGRAMMER_TYPE=arduino
 BAUD=57600
 PBAUD=115200
-PROGRAMMER_ARGS=-P/dev/ttyUSB0 -b$(PBAUD)
+PROGRAMMER_ARGS=-P/dev/ttyUSB2 -b$(PBAUD)
 FUSE_PROGRAMMER_ARGS=
 BOOTLOADER=../../tools/optiboot_atmega328.hex
 LFUSE = 0xFF
@@ -132,8 +132,8 @@ clear_eeprom_save_fuse: fuses
 rtags:
 	$(MAKE) -nk $(OBJECTS) | rc -c -
 
-bootloader:-
-	$(AVRDUDE) -c $(FUSE_PROGRAMMER_TYPE) -p $(MCU) $(FUSE_PROGRAMMER_ARGS) \
+bootloader:
+	$(AVRDUDE) -c $(FUSE_PROGRAMMER_TYPE) -p $(MCU) $(FUSE_PROGRAMMER_ARGS) -B 46.88 \
 	-e -Ulock:w:0x3F:m -Uefuse:w:0xFD:m -Uhfuse:w:0xDE:m -Ulfuse:w:0xFF:m
 
 	$(AVRDUDE) -c $(FUSE_PROGRAMMER_TYPE) -p $(MCU) $(FUSE_PROGRAMMER_ARGS) \
