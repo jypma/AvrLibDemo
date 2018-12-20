@@ -37,3 +37,4 @@ target
 *.eeprom
 *.bak
 *.kicad_pcb-bak
+.rtags-config
