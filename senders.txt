@@ -8,4 +8,8 @@ d  DoorSensor
 r  RFSwitch (outputs)
 f  RFSwitch (inputs)
 n  NimhCharge
-h  Heater
+h  Heater (old)
+l  RFLamp (state)
+l  RFLamp (command)
+e  Heater (state)
+e  Heater (command)

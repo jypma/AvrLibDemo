@@ -45,7 +45,7 @@ using namespace Dallas;
 using namespace Serial;
 
 struct State {
-  uint16_t values;
+  uint16_t values = 0;
 
   typedef Protobuf::Protocol<State> P;
 
@@ -58,6 +58,21 @@ struct State {
   }
 };
 
+struct Command {
+  Option<uint16_t> turnOn;
+  Option<uint16_t> turnOff;
+
+  typedef Protobuf::Protocol<Command> P;
+
+  typedef P::Message<
+    P::Varint<1, Option<uint16_t>, &Command::turnOn>,
+    P::Varint<2, Option<uint16_t>, &Command::turnOff>
+    > DefaultProtocol;
+
+  constexpr bool operator != (const Command &b) const {
+    return (b.turnOn != turnOn) && (b.turnOff != turnOff);
+  }
+};
 
 struct Heater: public Task {
   typedef Heater This;
@@ -66,8 +81,7 @@ struct Heater: public Task {
   const uint16_t invertMask = read(&EEPROM::inverted);
 
   SPIMaster spi;
-  Usart0 usart0 = { 9600 };
-  // Usart0 usart0 = { 57600 };    
+  Usart0 usart0 = { 57600 };
   auto_var(pinTX, PinPD1(usart0));
 
   auto_var(timer0, Timer0::withPrescaler<1024>::inNormalMode());
@@ -97,8 +111,8 @@ struct Heater: public Task {
   Deadline<decltype(rt), decltype(360_min)> timeouts[N] =
     { {rt}, {rt}, {rt}, {rt}, {rt}, {rt}, {rt}, {rt}, {rt}, {rt}, {rt}, {rt} };
 
-  RxTxState<decltype(rfm), decltype(rt), State> state =
-    { rfm, rt, { 0 }, uint16_t('h' << 8) | read(&EEPROM::id) };
+  TxState<decltype(rfm), decltype(rt), State> state = { rfm, rt, { 0 }, uint16_t('e' << 8) | read(&EEPROM::id) };
+  RxState<decltype(rfm), Command> command = { rfm, {}, uint16_t('e' << 8) | read(&EEPROM::id) };
 
   auto_var(pollInputs, periodic(rt, 100_ms));
 
@@ -180,9 +194,24 @@ struct Heater: public Task {
     }
   }
 
+  void applyCommand() {
+    auto v = state.get().values;
+    for (auto on: command.get().turnOn) {
+      v |= on;
+    }
+    for (auto off: command.get().turnOff) {
+      v &= ~off;
+    }
+    if (v != state.get().values) {
+      state.set({ v });
+    }
+  }
+
   void loop() {
     while (rfm.in().hasContent()) {
-      if (state.isStateChanged()) {
+      if (command.isStateChanged()) {
+        applyCommand();
+        command.reset();
         scheduleTimeouts();
         applyOutput();
       } else {
@@ -222,7 +251,7 @@ public:
     applyOutput();
     auto statusTask = status.invoking<This, &This::printStatus>(*this);
     while(true) {
-      loopTasks(power, rfm, statusTask, *this);
+      loopTasks(power, rfm, state, statusTask, *this);
     }
   }
 };
