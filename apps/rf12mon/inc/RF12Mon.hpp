@@ -24,22 +24,28 @@ struct RF12Mon {
     ADConverter<uint16_t> adc;
 
     Usart0 usart0 = { 57600 };
-    auto_var(pinTX, PinPD1<250>(usart0));
-    auto_var(timer0, Timer0::withPrescaler<1024>::inNormalMode());
-    auto_var(timer1, Timer1::withPrescaler<1>::inFastPWMMode());
+  PinPD1_t<decltype(usart0), 250> pinTX;
+  // FIXME timers should be types to make this simpler.
+  Timer0::withPrescaler<1024>::Normal timer0;
+  Timer1::withPrescaler<1>::FastPWM timer1;
+  RealTimer<decltype(timer0)> rt = { timer0 };
+  HAL::Atmel::Impl::Power<decltype(rt)> power = { rt };
 
-    auto_var(rt, realTimer(timer0));
-    auto_var(power, Power(rt));
 
     auto_var(pinRFM12_INT, PinPD2());
     auto_var(pinRFM12_SS, PinPB2());
-    auto_var(pinLED, PinPB1(timer1)); // arduino pin D9
+  PinPB1_t<decltype(timer1)> pinLED = { timer1 };
+  //    auto_var(pinLED, PinPB1(timer1)); // arduino pin D9
+  RFM12<decltype(spi), decltype(pinRFM12_SS), decltype(pinRFM12_INT), decltype(timer0)::comparatorA_t, true, 4, 100> rfm = {
+    spi, pinRFM12_SS, pinRFM12_INT, &timer0.comparatorA(), RFM12Band::_868Mhz };
 
-    auto_var(rfm, (rfm12<4,100>(spi, pinRFM12_SS, pinRFM12_INT, timer0.comparatorA(), RFM12Band::_868Mhz)));
-
-    auto_var(anim, animator(rt));
+  Animator<decltype(rt)> anim = { rt };
 
     uint8_t oldInts = 0;
+
+  RF12Mon() {
+
+  }
 
     typedef Delegate<This, decltype(rt), &This::rt,
             Delegate<This, decltype(pinTX), &This::pinTX,
@@ -61,7 +67,7 @@ struct RF12Mon {
         //power.sleepUntilTasks(rfmState, anim);
     }
 
-    int main() {
+    void main() {
         log::debug(F("RF12Mon"));
         log::flush();
         pinLED.configureAsOutputLow();

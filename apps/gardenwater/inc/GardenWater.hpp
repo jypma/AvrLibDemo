@@ -24,18 +24,20 @@ struct GardenWater {
   typedef Logging::Log<Loggers::Main> log;
 
   Usart0 usart0 = { 57600 };
-  auto_var(pinTX, PinPD1<250>(usart0));
-  auto_var(timer0, Timer0::withPrescaler<1024>::inNormalMode());
-  auto_var(rt, realTimer(timer0));
-  auto_var(power, Power(rt));
-  auto_var(timeout, deadline(rt));
+  PinPD1_t<decltype(usart0), 250> pinTX;
+  Timer0::withPrescaler<1024>::Normal timer0;
+  RealTimer<decltype(timer0)> rt = { timer0 };
+  HAL::Atmel::Impl::Power<decltype(rt)> power = { rt };
+  VariableDeadline<decltype(rt)> timeout = { rt };
+
   auto_var(pinValvePower, JeeNodePort1D());
   auto_var(pinValveOn, JeeNodePort2D());
   auto_var(pinValveOff, JeeNodePort3D());
-  auto_var(print, periodic(rt, 1_min));
+
+  Periodic<decltype(rt), decltype(1_min)> print = { rt };
 
   WaterState state = PAUSE;
-  const uint8_t waterPerDay = 2;
+  const uint8_t waterPerDay = 6;
   uint8_t waterCount = 0;
 
   typedef Delegate<This, decltype(rt), &This::rt,
@@ -90,8 +92,9 @@ struct GardenWater {
   }
 
   void onPrint() {
+    uint32_t millis = uint32_t(timeout.timeLeftIfScheduled().getOrElse(Milliseconds(0)));
     log::debug(dec(uint8_t(state)), F(" for "),
-               dec(uint16_t(timeout.timeLeftIfScheduled().getOrElse(0) / 60000)),
+               dec(millis / 60000),
                F("min"));
   }
 

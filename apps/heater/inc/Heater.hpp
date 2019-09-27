@@ -82,14 +82,15 @@ struct Heater: public Task {
 
   SPIMaster spi;
   Usart0 usart0 = { 57600 };
-  auto_var(pinTX, PinPD1(usart0));
+  PinPD1_t<decltype(usart0), 240> pinTX;
 
-  auto_var(timer0, Timer0::withPrescaler<1024>::inNormalMode());
-  auto_var(rt, realTimer(timer0));
+  Timer0::withPrescaler<1024>::Normal timer0;
+  RealTimer<decltype(timer0)> rt = { timer0 };
   auto_var(pinRFM12_SS, PinPB2());
   auto_var(pinRFM12_INT, PinPD2());
-  auto_var(rfm, rfm12(spi, pinRFM12_SS, pinRFM12_INT, timer0.comparatorA(), RFM12Band::_868Mhz));
-  auto_var(power, Power(rt));
+  RFM12<decltype(spi), decltype(pinRFM12_SS), decltype(pinRFM12_INT), decltype(timer0)::comparatorA_t, true, 100, 100> rfm = {
+    spi, pinRFM12_SS, pinRFM12_INT, &timer0.comparatorA(), RFM12Band::_868Mhz };
+  HAL::Atmel::Impl::Power<decltype(rt)> power = { rt };
 
   auto_var(pinOut0, ArduinoPinD3());
   auto_var(pinOut1, ArduinoPinD4());
@@ -106,7 +107,7 @@ struct Heater: public Task {
 
   static constexpr uint8_t N = 12;
 
-  auto_var(status, periodic(rt, 10_sec));
+  Periodic<decltype(rt), decltype(10_sec)> status = { rt };
 
   Deadline<decltype(rt), decltype(360_min)> timeouts[N] =
     { {rt}, {rt}, {rt}, {rt}, {rt}, {rt}, {rt}, {rt}, {rt}, {rt}, {rt}, {rt} };
@@ -114,7 +115,7 @@ struct Heater: public Task {
   TxState<decltype(rfm), decltype(rt), State> state = { rfm, rt, { 0 }, uint16_t('e' << 8) | read(&EEPROM::id) };
   RxState<decltype(rfm), Command> command = { rfm, {}, uint16_t('e' << 8) | read(&EEPROM::id) };
 
-  auto_var(pollInputs, periodic(rt, 100_ms));
+  Periodic<decltype(rt), decltype(100_ms)> pollInputs = { rt };
 
   typedef Delegate<
     This, decltype(rt), &This::rt,

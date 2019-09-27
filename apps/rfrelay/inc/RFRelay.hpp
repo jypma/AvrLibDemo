@@ -57,15 +57,15 @@ struct RFRelay {
     static auto constexpr band = RFM12Band::_868Mhz;
 
     Usart0 usart0 = { 115200 };
-    auto_var(pinTX, PinPD1<250>(usart0));
-    auto_var(pinRX, PinPD0<250>(usart0));
+  PinPD1_t<decltype(usart0), 250> pinTX;
+  PinPD0_t<decltype(usart0), 250> pinRX;
 
-    auto_var(timer0, Timer0::withPrescaler<64>::inNormalMode());
-    auto_var(timer1, Timer1::withPrescaler<64>::inNormalMode());
-    auto_var(rt, realTimer(timer0));
+  Timer0::withPrescaler<64>::Normal timer0;
+  Timer1::withPrescaler<64>::Normal timer1;
+  RealTimer<decltype(timer0)> rt = { timer0 };
 
-    auto_var(pinLOG, PinPB1(timer1)); // Arduino D9
-    auto_var(logger, (RS232Tx<9600, 240>(pinLOG)));
+  PinPB1_t<decltype(timer1)> pinLOG = { timer1 }; // Arduino D9
+  ::Serial::Impl::RS232Tx<decltype(pinLOG), 9600, 240> logger = { pinLOG };
 
     auto_var(pinRFM12_INT, PinPD2());
     auto_var(pinOOK, PinPD3());
@@ -75,13 +75,16 @@ struct RFRelay {
     auto_var(pinESP_PD, PinPD7());
     auto_var(pinLED2, PinPB0());
     auto_var(pinRFM12_SS, PinPB2());
-    auto_var(rfm, (rfm12<128,128>(spi, pinRFM12_SS, pinRFM12_INT, timer0.comparatorA(), band)));
-    auto_var(counter, pulseCounter(timer0.comparatorB(), pinOOK, 150_us));
-    auto_var(esp, (esp8266<&EEPROM::apn,&EEPROM::password,&EEPROM::remoteIP,&EEPROM::remotePort>(pinTX, pinRX, pinESP_PD, rt)));
-    auto_var(fs20, fs20Decoder(counter));
-    auto_var(visonic, visonicDecoder(counter));
-    auto_var(pingInterval, periodic(rt, 10_s));
-    auto_var(rfmWatchdog, deadline(rt, 60000_ms));
+  RFM12<decltype(spi), decltype(pinRFM12_SS), decltype(pinRFM12_INT), decltype(timer0)::comparatorA_t, true, 100, 100> rfm = {
+    spi, pinRFM12_SS, pinRFM12_INT, &timer0.comparatorA(), RFM12Band::_868Mhz };
+
+  MinPulseCounter<decltype(timer0)::comparatorB_t, decltype(pinOOK)> counter = { timer0.comparatorB(), pinOOK, 150_us };
+  ESP8266<&EEPROM::apn, &EEPROM::password, &EEPROM::remoteIP, &EEPROM::remotePort,
+          decltype(pinTX), decltype(pinRX), decltype(pinESP_PD), decltype(rt)> esp = { pinTX, pinRX, pinESP_PD, rt };
+  FS20Decoder<decltype(counter)> fs20 = { };
+  VisonicDecoder<decltype(counter)> visonic = { };
+  Periodic<decltype(rt), decltype(10_s)> pingInterval = { rt };
+  Deadline<decltype(rt), decltype(60_s)> rfmWatchdog = { rt };
 
     typedef Delegate<This, decltype(pinTX), &This::pinTX,
     		Delegate<This, decltype(pinRX), &This::pinRX,
@@ -90,7 +93,7 @@ struct RFRelay {
             Delegate<This, decltype(logger), &This::logger,
             Delegate<This, decltype(counter), &This::counter>>>>>> Handlers;
 
-    auto_var(blink, deadline(rt));
+  VariableDeadline<decltype(rt)> blink = { rt };
     bool blinkOn = false;
     uint8_t blinkIdx = 0;
     Ping ping = {};
@@ -107,12 +110,14 @@ struct RFRelay {
         FS20Packet fs20Packet;
         if (fs20.read(&fs20Packet)) {
             ping.packets_in++;
+            log::debug(F("if"));
             esp.write(TYPE_FS20, &fs20Packet);
         }
 
         VisonicPacket visonicPacket;
         if (visonic.read(&visonicPacket)) {
             ping.packets_in++;
+            log::debug(F("iv"));
             esp.write(TYPE_VISONIC, &visonicPacket);
         }
 
@@ -195,6 +200,7 @@ struct RFRelay {
                             log::debug('e','f');
                             return ReadResult::Valid;
                         }
+                        log::debug(F("of"));
                         rfm.write_fs20(inPacket);
                         ping.packets_out++;
                         break;
@@ -205,6 +211,7 @@ struct RFRelay {
                             log::debug('e','r');
                             return ReadResult::Valid;
                         }
+                        log::debug(F("or"));
                         rfm.write_fsk(header, read);
                         ping.packets_out++;
                         break;
@@ -215,10 +222,10 @@ struct RFRelay {
         }
     }
 
-    int main() {
-        while(true) {
-        	loop();
-        }
+    void main() {
+      while(true) {
+        loop();
+      }
     }
 };
 

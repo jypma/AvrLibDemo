@@ -39,7 +39,7 @@ EEPROMS=$(wildcard $(EEPROM_SOURCEDIR)/*.eeprom)
 EEPROM_BINS=$(patsubst $(EEPROM_SOURCEDIR)/%.eeprom,$(BUILDDIR)/%.eeprom_bin,$(EEPROMS))
 
 ## Compilation options, type man avr-gcc if you're curious.
-CPPFLAGS = -DF_CPU=$(F_CPU) -std=gnu++14 -fno-use-cxa-atexit 
+CPPFLAGS = -DF_CPU=$(F_CPU) -std=gnu++17 -fno-use-cxa-atexit 
 CFLAGS = -Os -g -Wall
 ## Use short (8-bit) data types 
 CFLAGS += -funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums 
@@ -103,6 +103,9 @@ size:  $(TARGET).elf
 flash: $(TARGET).hex size
 	$(AVRDUDE) -c $(PROGRAMMER_TYPE) -p $(MCU) $(PROGRAMMER_ARGS) -U flash:w:$<
 
+flash_ext: $(TARGET).hex size
+	$(AVRDUDE) -c $(FUSE_PROGRAMMER_TYPE) -p $(MCU) $(FUSE_PROGRAMMER_ARGS) -U flash:w:$<
+
 eeprom: $(EEPROM_FILE)
 	$(AVRDUDE) -c $(FUSE_PROGRAMMER_TYPE) -p $(MCU) $(FUSE_PROGRAMMER_ARGS) -U eeprom:w:$<
 
@@ -117,7 +120,7 @@ show_fuses:
 	$(AVRDUDE) -c $(FUSE_PROGRAMMER_TYPE) -p $(MCU) $(FUSE_PROGRAMMER_ARGS) -nv	
 
 serial:
-	stty -F /dev/ttyUSB0 $(BAUD) raw -clocal -echo
+	stty -F /dev/ttyUSB0 $(BAUD) raw -clocal -echo -iexten
 	cat /dev/ttyUSB0 | awk '{ print strftime("%c: "), $$0; fflush(); }' | tee target/serial.log
 
 ## Set the EESAVE fuse byte to preserve EEPROM across flashes
