@@ -1,0 +1,150 @@
+Cmp-Mod V01 Created by PcbNew date = Sat 21 Mar 2015 14:12:33 CET
+
+BeginCmp
+TimeStamp = /545650C0;
+Reference = C1;
+ValeurCmp = 1u;
+IdModule  = SM0603_C_Hand;
+EndCmp
+
+BeginCmp
+TimeStamp = /54E9C2BB;
+Reference = C2;
+ValeurCmp = 0.1u;
+IdModule  = SM0603_C_Hand;
+EndCmp
+
+BeginCmp
+TimeStamp = /5453E538;
+Reference = D1;
+ValeurCmp = LED;
+IdModule  = LED-5MM;
+EndCmp
+
+BeginCmp
+TimeStamp = /54565051;
+Reference = D2;
+ValeurCmp = STPS2L40U;
+IdModule  = DIODE_SMB;
+EndCmp
+
+BeginCmp
+TimeStamp = /550C39D8;
+Reference = JP1;
+ValeurCmp = LED_DIRECT;
+IdModule  = S_JUMPER_2;
+EndCmp
+
+BeginCmp
+TimeStamp = /550C3E00;
+Reference = JP2;
+ValeurCmp = LED_DIRECT;
+IdModule  = S_JUMPER_2;
+EndCmp
+
+BeginCmp
+TimeStamp = /5453E551;
+Reference = K1;
+ValeurCmp = PIR;
+IdModule  = PIN_ARRAY_3X1;
+EndCmp
+
+BeginCmp
+TimeStamp = /545D2BDC;
+Reference = K2;
+ValeurCmp = SOIL;
+IdModule  = PIN_ARRAY_2X1;
+EndCmp
+
+BeginCmp
+TimeStamp = /550C1E9C;
+Reference = K3;
+ValeurCmp = DIST;
+IdModule  = PIN_ARRAY_4x1;
+EndCmp
+
+BeginCmp
+TimeStamp = /550C3B7D;
+Reference = Q1;
+ValeurCmp = IRLZ44N;
+IdModule  = TO220_MINI2;
+EndCmp
+
+BeginCmp
+TimeStamp = /5454FE1B;
+Reference = R1;
+ValeurCmp = 4.7k;
+IdModule  = SM0603_Hand;
+EndCmp
+
+BeginCmp
+TimeStamp = /5454FD70;
+Reference = R2;
+ValeurCmp = 4.7k;
+IdModule  = SM0603_Hand;
+EndCmp
+
+BeginCmp
+TimeStamp = /5454FF48;
+Reference = R3;
+ValeurCmp = 100;
+IdModule  = SM0603_Hand;
+EndCmp
+
+BeginCmp
+TimeStamp = /54565014;
+Reference = R4;
+ValeurCmp = 10k;
+IdModule  = SM0603_Hand;
+EndCmp
+
+BeginCmp
+TimeStamp = /545650E1;
+Reference = R5;
+ValeurCmp = 510k;
+IdModule  = SM0603_Hand;
+EndCmp
+
+BeginCmp
+TimeStamp = /54E9BF9B;
+Reference = R6;
+ValeurCmp = 5k;
+IdModule  = SM0603_Hand;
+EndCmp
+
+BeginCmp
+TimeStamp = /545D15F2;
+Reference = RV1;
+ValeurCmp = 20k;
+IdModule  = 3305_POT;
+EndCmp
+
+BeginCmp
+TimeStamp = /5453E505;
+Reference = U1;
+ValeurCmp = DS18B20;
+IdModule  = TO92-INVERT;
+EndCmp
+
+BeginCmp
+TimeStamp = /5453E4E7;
+Reference = U2;
+ValeurCmp = DHT11;
+IdModule  = DHT11_FLAT;
+EndCmp
+
+BeginCmp
+TimeStamp = /5454C609;
+Reference = U3;
+ValeurCmp = TINY328;
+IdModule  = TINY328_CONN;
+EndCmp
+
+BeginCmp
+TimeStamp = /54E9BE88;
+Reference = U4;
+ValeurCmp = APDS-9006-020;
+IdModule  = APDS-9006-020;
+EndCmp
+
+EndListe

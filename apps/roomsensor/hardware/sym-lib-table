@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name tiny328room-rescue)(type Legacy)(uri ${KIPRJMOD}/tiny328room-rescue.lib)(options "")(descr ""))
+  (lib (name rfm12)(type Legacy)(uri /home/jan/Documents/kicad/kicadlibrary/rfm12.lib)(options "")(descr ""))
+)
