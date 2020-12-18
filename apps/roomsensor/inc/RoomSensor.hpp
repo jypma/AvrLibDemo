@@ -61,7 +61,7 @@ struct RoomSensor: public Task {
     typedef RoomSensor This;
     typedef Logging::Log<Loggers::Main> log;
 
-    Usart0 usart0 = { 57600 };
+    Usart0 usart0 = { 115200 };
     auto_var(pinTX, PinPD1<240>(usart0));
     auto_var(pinRX, PinPD0());
 
@@ -73,17 +73,18 @@ struct RoomSensor: public Task {
     auto_var(timer1, Timer1::withPrescaler<1>::inNormalMode());
     auto_var(timer2, Timer2::withPrescaler<64>::inNormalMode());
     auto_var(rt, realTimer(timer0));
-    auto_var(nextMeasurement, deadline(rt, 2_s));
+    auto_var(nextMeasurement, deadline(rt, 60_s));
 
     auto_var(pinRFM12_INT, PinPD2());
     auto_var(pinRFM12_SS, PinPB2());
+  #define JEENODE_HARDWARE
 #ifdef JEENODE_HARDWARE
   auto_var(pinSupply, JeeNodePort2A());
-  auto_var(pinDHT, JeeNodePort2D().withInterrupt());
-  auto_var(pinDHTPower, JeeNodePort3A());
-  auto_var(pinPIRPower, JeeNodePort4D());
-  auto_var(pinPIRData, PinPD3());
-  auto_var(pinDS, PinPD9());
+  auto_var(pinDHT, JeeNodePort2D().withInterrupt());  // confirmed
+  auto_var(pinDHTPower, JeeNodePort3A());             // confirmed
+  auto_var(pinPIRPower, JeeNodePort4D());             // not connected, always on
+  auto_var(pinPIRData, PinPD3()); // JeeNodePortI(), confirmed
+  auto_var(pinDS, JeeNodePort1D());
 #else
   auto_var(pinSupply, ArduinoPinA0());
   auto_var(pinDHT, ArduinoPinD8().withInterrupt());
@@ -144,12 +145,17 @@ struct RoomSensor: public Task {
       for (int i = 0; i < 10; i++) supplyVoltage.get();
       m.supply = supplyVoltage.get();
       log::debug(F("Suppl: "), dec(m.supply));
+      if (m.supply > 4700U) {
+        // Don't send supply if we're on AC
+        m.supply = none();
+      }
+
       seq++;
       m.seq = seq;
       m.sender = 'Q' << 8 | read(&EEPROM::id);
       if (m.supply >= uint16_t(3300)) {
         // PIR sensor gets unreliable when dropping below 3.3V
-        // rfm.write_fsk(42, &m);
+        rfm.write_fsk(42, &m);
       }
     }
 
@@ -196,7 +202,7 @@ struct RoomSensor: public Task {
       m.seq = seq;
       m.sender = 'Q' << 8 | read(&EEPROM::id);
       pir.disable();
-      //rfm.write_fsk(42, &m);
+      rfm.write_fsk(42, &m);
       nextMeasurement.schedule();
     }
   }
@@ -206,6 +212,7 @@ struct RoomSensor: public Task {
     log::flush();
 
     auto measureTask = nextMeasurement.invoking<This, &This::measure>(*this);
+    measure();
     while(true) {
       //auto v = supplyVoltage.get();
       /*
