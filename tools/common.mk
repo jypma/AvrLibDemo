@@ -8,12 +8,13 @@ AVRSIZE=avr-size
 AVRDUDE=avrdude
 FUSE_PROGRAMMER_TYPE=usbasp
 PROGRAMMER_TYPE=arduino
-BAUD=57600
+BAUD=115200
 PBAUD=115200
 PROGRAMMER_PORT=$(shell echo /dev/ttyUSB*)
+SERIAL_PORT=$(PROGRAMMER_PORT)
 #PROGRAMMER_PORT=/dev/ttyUSB0
 PROGRAMMER_ARGS=-P$(PROGRAMMER_PORT) -b$(PBAUD)
-FUSE_PROGRAMMER_ARGS=
+FUSE_PROGRAMMER_ARGS=-B 46.88
 BOOTLOADER=../../tools/optiboot_atmega328.hex
 LFUSE = 0xFF
 HFUSE = 0xDE
@@ -120,8 +121,13 @@ show_fuses:
 	$(AVRDUDE) -c $(FUSE_PROGRAMMER_TYPE) -p $(MCU) $(FUSE_PROGRAMMER_ARGS) -nv	
 
 serial:
-	stty -F /dev/ttyUSB0 $(BAUD) raw -clocal -echo -iexten
-	cat /dev/ttyUSB0 | awk '{ print strftime("%c: "), $$0; fflush(); }' | tee target/serial.log
+	stty -F $(SERIAL_PORT) $(BAUD) raw -clocal -echo -iexten
+	cat $(SERIAL_PORT) | awk '{ print strftime("%c: "), $$0; fflush(); }' | tee target/serial.log
+
+hex_serial:
+	stty -F $(SERIAL_PORT) $(BAUD) raw -clocal -echo -iexten
+	hexdump -v -e '1/1 "%02x\n"' $(SERIAL_PORT)
+
 
 ## Set the EESAVE fuse byte to preserve EEPROM across flashes
 set_eeprom_save_fuse: HFUSE = 0xD6
